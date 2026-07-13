@@ -1,68 +1,72 @@
 name: Admin API CI
 
 on:
+  workflow_dispatch:
+
   push:
     branches:
+      - master
       - patch-cicd-demo
 
     paths:
-      - 'src/AdminAPI/**'
+      - 'Demo-Patch-CICD/src/AdminAPI/**'
 
 env:
-  CONFIG_FILE: Demo-Patch-CICD/config/patch.config
+  CONFIG_FILE: config/patch.config
 
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
 
     steps:
 
-    - name: Checkout
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '8.0.x'
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
 
-    - name: Read Patch Configuration
-      shell: bash
-      run: |
-        echo "SPRINT=$(grep SPRINT $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
-        echo "PATCH=$(grep PATCH $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
-        echo "VERSION=$(grep VERSION $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
+      - name: Read Patch Configuration
+        shell: bash
+        run: |
+          echo "SPRINT=$(grep SPRINT $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
+          echo "PATCH=$(grep PATCH $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=$(grep RELEASE_VERSION $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
 
-    - name: Restore
-      run: |
-        dotnet restore Demo-Patch-CICD/src/AdminAPI/AdminAPI.csproj
+      - name: Restore
+        run: |
+          dotnet restore src/AdminAPI/AdminAPI.csproj
 
-    - name: Build
-      run: |
-        dotnet build Demo-Patch-CICD/src/AdminAPI/AdminAPI.csproj \
-        --configuration Release \
-        --no-restore
+      - name: Build
+        run: |
+          dotnet build src/AdminAPI/AdminAPI.csproj --configuration Release --no-restore
 
-    - name: Test
-      run: |
-        dotnet test Demo-Patch-CICD/src/AdminAPI/AdminAPI.csproj \
-        --no-build
+      - name: Test
+        run: |
+          dotnet test src/AdminAPI/AdminAPI.csproj --no-build
 
-    - name: Publish
-      run: |
-        dotnet publish Demo-Patch-CICD/src/AdminAPI/AdminAPI.csproj \
-        -c Release \
-        -o publish/AdminAPI
+      - name: Publish
+        run: |
+          dotnet publish src/AdminAPI/AdminAPI.csproj -c Release -o publish/AdminAPI
 
-    - name: Create Artifact Folder
-      shell: bash
-      run: |
-        mkdir -p artifacts/Sprint${SPRINT}/Patch${PATCH}
-        cp -r publish/AdminAPI/* artifacts/Sprint${SPRINT}/Patch${PATCH}/
+      - name: Create Artifact Folder
+        shell: bash
+        run: |
+          mkdir -p artifacts/Sprint${SPRINT}/Patch${PATCH}
+          cp -R publish/AdminAPI/. artifacts/Sprint${SPRINT}/Patch${PATCH}/
 
+<<<<<<< HEAD
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: Admin_Sprint${{ env.SPRINT }}_Patch${{ env.PATCH }}
         path: artifacts/Sprint${{ env.SPRINT }}/Patch${{ env.PATCH }}
+=======
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Admin_Sprint${{ env.SPRINT }}_Patch${{ env.PATCH }}
+          path: artifacts/Sprint${{ env.SPRINT }}/Patch${{ env.PATCH }}
+>>>>>>> 64e11888818c8a83bed740e930834f49506d57f5
