@@ -9,8 +9,7 @@ on:
       - patch-cicd-demo
 
     paths:
-      - 'src/AdminAPI/**'
-      - 'config/patch.config'
+      - 'Demo-Patch-CICD/src/AdminAPI/**'
 
 env:
   CONFIG_FILE: config/patch.config
@@ -58,8 +57,8 @@ jobs:
           mkdir -p artifacts/Sprint${SPRINT}/Patch${PATCH}
           cp -R publish/AdminAPI/. artifacts/Sprint${SPRINT}/Patch${PATCH}/
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Admin_Sprint${{ env.SPRINT }}_Patch${{ env.PATCH }}
-          path: artifacts/Sprint${{ env.SPRINT }}/Patch${{ env.PATCH }}
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Admin_Sprint${{ env.SPRINT }}_Patch${{ env.PATCH }}
+        path: artifacts/Sprint${{ env.SPRINT }}/Patch${{ env.PATCH }}
