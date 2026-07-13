@@ -7,10 +7,11 @@ on:
     branches:
       - master
       - patch-cicd-demo
-
     paths:
       - 'src/AdminAPI/**'
       - 'config/patch.config'
+      - '!.artifacts/**'
+      - '!artifacts/**'
 
 env:
   CONFIG_FILE: config/patch.config
@@ -23,6 +24,8 @@ jobs:
 
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
@@ -36,12 +39,6 @@ jobs:
           echo "PATCH=$(grep '^PATCH=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
           echo "VERSION=$(grep '^VERSION=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
 
-      - name: Display Configuration
-        run: |
-          echo "Sprint : $SPRINT"
-          echo "Patch  : $PATCH"
-          echo "Version: $VERSION"
-
       - name: Restore
         run: dotnet restore src/AdminAPI/AdminAPI.csproj
 
@@ -49,7 +46,7 @@ jobs:
         run: dotnet build src/AdminAPI/AdminAPI.csproj --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test src/AdminAPI/AdminAPI.csproj --no-build --verbosity normal
+        run: dotnet test src/AdminAPI/AdminAPI.csproj --no-build
 
       - name: Publish
         run: |
@@ -57,25 +54,83 @@ jobs:
             -c Release \
             -o publish/AdminAPI
 
-      - name: Verify Publish Output
-        run: |
-          echo "Published Files"
-          ls -R publish/AdminAPI
+      ###########################################################
+      # Create Repository Artifact Structure
+      ###########################################################
 
-      - name: Create Artifact Folder
+      - name: Create Artifact Folders
+        shell: bash
         run: |
-          mkdir -p artifacts/Sprint${SPRINT}/Patch${PATCH}
-          cp -R publish/AdminAPI/. artifacts/Sprint${SPRINT}/Patch${PATCH}/
+          mkdir -p artifacts/AdminAPI/New
+          mkdir -p artifacts/AdminAPI/Old1
+          mkdir -p artifacts/AdminAPI/Old2
 
-      - name: Verify Artifact Folder
+      ###########################################################
+      # Rotate Old Builds
+      ###########################################################
+
+      - name: Rotate Previous Artifacts
+        shell: bash
         run: |
-          echo "Artifact Structure"
+
+          rm -rf artifacts/AdminAPI/Old2/*
+          cp -R artifacts/AdminAPI/Old1/. artifacts/AdminAPI/Old2/ 2>/dev/null || true
+
+          rm -rf artifacts/AdminAPI/Old1/*
+          cp -R artifacts/AdminAPI/New/. artifacts/AdminAPI/Old1/ 2>/dev/null || true
+
+          rm -rf artifacts/AdminAPI/New/*
+
+      ###########################################################
+      # Copy Latest Build
+      ###########################################################
+
+      - name: Copy Latest Build
+        shell: bash
+        run: |
+          cp -R publish/AdminAPI/. artifacts/AdminAPI/New/
+
+      ###########################################################
+      # Zip Latest Build
+      ###########################################################
+
+      - name: Create ZIP
+        shell: bash
+        run: |
+          cd artifacts/AdminAPI/New
+          zip -r ../Admin_Sprint${SPRINT}_Patch${PATCH}.zip .
+
+      ###########################################################
+      # Verify
+      ###########################################################
+
+      - name: Show Repository Artifacts
+        run: |
           ls -R artifacts
+
+      ###########################################################
+      # Commit Updated Repository Artifacts
+      ###########################################################
+
+      - name: Commit Artifact History
+        shell: bash
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add artifacts
+
+          git commit -m "Update AdminAPI artifact history" || echo "Nothing to commit"
+
+          git push origin HEAD:${{ github.ref_name }}
+
+      ###########################################################
+      # Upload GitHub Artifact
+      ###########################################################
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Admin_Sprint${{ env.SPRINT }}_Patch${{ env.PATCH }}
-          path: artifacts/Sprint${{ env.SPRINT }}/Patch${{ env.PATCH }}
-          if-no-files-found: error
+          path: artifacts/AdminAPI/Admin_Sprint${{ env.SPRINT }}_Patch${{ env.PATCH }}.zip
           retention-days: 30
