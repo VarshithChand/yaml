@@ -1,3 +1,17 @@
+name: Release Admin API
+
+on:
+  workflow_dispatch:
+    inputs:
+      sprint:
+        description: "Sprint Number"
+        required: true
+        default: "73"
+      patch:
+        description: "Patch Number"
+        required: true
+        default: "01"
+
 jobs:
 
   deploy_rc:
@@ -18,10 +32,12 @@ jobs:
         run: ls -R deploy
 
       - name: Create RC Folder
-        run: mkdir -p Demo-Patch-CICD/environments/RC
+        run: |
+          mkdir -p Demo-Patch-CICD/environments/RC
 
       - name: Deploy to RC
-        run: cp -R deploy/. Demo-Patch-CICD/environments/RC/
+        run: |
+          cp -R deploy/. Demo-Patch-CICD/environments/RC/
 
   deploy_cluster01:
     name: Deploy to Cluster01
@@ -39,10 +55,12 @@ jobs:
           path: deploy
 
       - name: Create Cluster01 Folder
-        run: mkdir -p Demo-Patch-CICD/environments/Cluster01
+        run: |
+          mkdir -p Demo-Patch-CICD/environments/Cluster01
 
       - name: Deploy to Cluster01
-        run: cp -R deploy/. Demo-Patch-CICD/environments/Cluster01/
+        run: |
+          cp -R deploy/. Demo-Patch-CICD/environments/Cluster01/
 
   deploy_cluster02:
     name: Deploy to Cluster02
@@ -60,10 +78,12 @@ jobs:
           path: deploy
 
       - name: Create Cluster02 Folder
-        run: mkdir -p Demo-Patch-CICD/environments/Cluster02
+        run: |
+          mkdir -p Demo-Patch-CICD/environments/Cluster02
 
       - name: Deploy to Cluster02
-        run: cp -R deploy/. Demo-Patch-CICD/environments/Cluster02/
+        run: |
+          cp -R deploy/. Demo-Patch-CICD/environments/Cluster02/
 
   deploy_cluster03:
     name: Deploy to Cluster03
@@ -81,7 +101,9 @@ jobs:
           path: deploy
 
       - name: Create Cluster03 Folder
-        run: mkdir -p Demo-Patch-CICD/environments/Cluster03
+        run: |
+          mkdir -p Demo-Patch-CICD/environments/Cluster03
 
       - name: Deploy to Cluster03
-        run: cp -R deploy/. Demo-Patch-CICD/environments/Cluster03/
+        run: |
+          cp -R deploy/. Demo-Patch-CICD/environments/Cluster03/
