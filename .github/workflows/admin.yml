@@ -161,8 +161,8 @@ jobs:
       - name: Commit Artifact History
         shell: bash
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
+          git config user.name "sam"
+          git config user.email "sam@github-actions.local"
           git checkout ${GITHUB_REF_NAME}
           git add artifacts
 
