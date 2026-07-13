@@ -155,37 +155,40 @@ jobs:
       - name: Commit Artifact History
         shell: bash
         run: |
-
-         git config user.name "github-actions"
-         git config user.email "github-actions@github.com"
+        
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
 
           # Checkout current branch
-         git checkout ${GITHUB_REF_NAME}
+          git checkout ${GITHUB_REF_NAME}
 
-         # Stage artifact changes FIRST
-         git add artifacts
+          # Stage artifact changes
+          git add artifacts
 
-         # Nothing changed?
-         if git diff --cached --quiet; then
+          # Nothing changed?
+          if git diff --cached --quiet; then
             echo "No artifact changes."
             exit 0
-         fi
+          fi
 
-         # Commit local changes
-         TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S UTC")
-         git commit -m "AdminAPI Artifact | Sprint ${SPRINT} | Patch ${PATCH} | ${TIMESTAMP}"
+          # Timestamp (IST)
+          TIMESTAMP=$(TZ=Asia/Kolkata date +"%Y-%m-%d %H:%M:%S IST")
 
-         # Retry push if remote changed
-         for i in 1 2 3
-         do
-          if git pull --rebase origin ${GITHUB_REF_NAME} && \
-             git push origin ${GITHUB_REF_NAME}; then
-          echo "Push Successful"
-          exit 0
-         fi
+          # Commit
+          git commit -m "AdminAPI Artifact | Sprint ${SPRINT} | Patch ${PATCH} | ${TIMESTAMP}"
+
+          # Retry push if remote changed
+          for i in 1 2 3
+          do
+            if git pull --rebase origin ${GITHUB_REF_NAME} && \
+               git push origin ${GITHUB_REF_NAME}; then
+               echo "Push Successful"
+            exit 0
+            fi
+
           echo "Retry $i..."
           sleep 2
-         done
+          done
 
-         echo "Push failed after 3 attempts."
-         exit 1
+          echo "Push failed after 3 attempts."
+          exit 1
