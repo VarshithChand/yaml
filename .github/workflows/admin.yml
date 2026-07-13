@@ -34,7 +34,7 @@ jobs:
         run: |
           echo "SPRINT=$(grep SPRINT $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
           echo "PATCH=$(grep PATCH $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
-          echo "VERSION=$(grep VERSION $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=$(grep RELEASE_VERSION $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
 
       - name: Restore
         run: |
