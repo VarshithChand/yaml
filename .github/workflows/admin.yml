@@ -6,7 +6,7 @@ on:
       - patch-cicd-demo
 
     paths:
-      - 'yaml/src/AdminAPI/**'
+      - 'src/AdminAPI/**'
 
 env:
   CONFIG_FILE: Demo-Patch-CICD/config/patch.config
