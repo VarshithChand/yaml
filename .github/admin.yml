@@ -6,7 +6,7 @@ on:
       - patch-cicd-demo
     paths:
       - 'Demo-Patch-CICD/src/AdminAPI/**'
-
+#new line
 jobs:
   build:
     runs-on: ubuntu-latest
