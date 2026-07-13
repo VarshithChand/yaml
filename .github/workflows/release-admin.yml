@@ -3,6 +3,9 @@ name: Release Admin API
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
 
   read_config:
@@ -19,8 +22,8 @@ jobs:
       - id: config
         shell: bash
         run: |
-          echo "sprint=$(grep SPRINT config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
-          echo "patch=$(grep PATCH config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+          echo "sprint=$(grep '^SPRINT=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+          echo "patch=$(grep '^PATCH=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
 
   deploy_rc:
     name: Deploy to RC
@@ -32,10 +35,14 @@ jobs:
 
     steps:
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: Admin_Sprint${{ needs.read_config.outputs.sprint }}_Patch${{ needs.read_config.outputs.patch }}
-          path: deploy
+      - uses: actions/checkout@v4
+
+      - name: Copy Latest Artifact
+        shell: bash
+        run: |
+          mkdir -p deploy
+          LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
+          cp "$LATEST" deploy/
 
       - name: Show Artifact
         run: ls -R deploy
@@ -48,7 +55,10 @@ jobs:
 
   deploy_cluster01:
     name: Deploy Cluster01
-    needs: deploy_rc
+    needs:
+      - read_config
+      - deploy_rc
+
     runs-on: ubuntu-latest
 
     environment:
@@ -56,10 +66,14 @@ jobs:
 
     steps:
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: Admin_Sprint${{ needs.read_config.outputs.sprint }}_Patch${{ needs.read_config.outputs.patch }}
-          path: deploy
+      - uses: actions/checkout@v4
+
+      - name: Copy Latest Artifact
+        shell: bash
+        run: |
+          mkdir -p deploy
+          LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
+          cp "$LATEST" deploy/
 
       - run: mkdir -p environments/Cluster01
 
@@ -67,7 +81,10 @@ jobs:
 
   deploy_cluster02:
     name: Deploy Cluster02
-    needs: deploy_cluster01
+    needs:
+      - read_config
+      - deploy_cluster01
+
     runs-on: ubuntu-latest
 
     environment:
@@ -75,10 +92,14 @@ jobs:
 
     steps:
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: Admin_Sprint${{ needs.read_config.outputs.sprint }}_Patch${{ needs.read_config.outputs.patch }}
-          path: deploy
+      - uses: actions/checkout@v4
+
+      - name: Copy Latest Artifact
+        shell: bash
+        run: |
+          mkdir -p deploy
+          LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
+          cp "$LATEST" deploy/
 
       - run: mkdir -p environments/Cluster02
 
@@ -86,7 +107,10 @@ jobs:
 
   deploy_cluster03:
     name: Deploy Cluster03
-    needs: deploy_cluster02
+    needs:
+      - read_config
+      - deploy_cluster02
+
     runs-on: ubuntu-latest
 
     environment:
@@ -94,10 +118,14 @@ jobs:
 
     steps:
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: Admin_Sprint${{ needs.read_config.outputs.sprint }}_Patch${{ needs.read_config.outputs.patch }}
-          path: deploy
+      - uses: actions/checkout@v4
+
+      - name: Copy Latest Artifact
+        shell: bash
+        run: |
+          mkdir -p deploy
+          LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
+          cp "$LATEST" deploy/
 
       - run: mkdir -p environments/Cluster03
 
