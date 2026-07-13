@@ -1,0 +1,52 @@
+name: PMSCore API CI
+
+on:
+  push:
+    branches:
+      - patch-cicd-demo
+
+    paths:
+      - 'Demo-Patch-CICD/src/PMSCoreAPI/**'
+
+env:
+  CONFIG_FILE: Demo-Patch-CICD/config/patch.config
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Read Patch Configuration
+      shell: bash
+      run: |
+        echo "SPRINT=$(grep SPRINT $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
+        echo "PATCH=$(grep PATCH $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
+        echo "VERSION=$(grep VERSION $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
+
+    - run: dotnet restore Demo-Patch-CICD/src/PMSCoreAPI/PMSCoreAPI.csproj
+
+    - run: dotnet build Demo-Patch-CICD/src/PMSCoreAPI/PMSCoreAPI.csproj --configuration Release --no-restore
+
+    - run: dotnet test Demo-Patch-CICD/src/PMSCoreAPI/PMSCoreAPI.csproj --no-build
+
+    - run: dotnet publish Demo-Patch-CICD/src/PMSCoreAPI/PMSCoreAPI.csproj -c Release -o publish/PMSCoreAPI
+
+    - name: Create Artifact Folder
+      shell: bash
+      run: |
+        mkdir -p artifacts/Sprint${SPRINT}/Patch${PATCH}
+        cp -r publish/PMSCoreAPI/* artifacts/Sprint${SPRINT}/Patch${PATCH}/
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: PMSCore_Sprint${{ env.SPRINT }}_Patch${{ env.PATCH }}
+        path: artifacts/Sprint${{ env.SPRINT }}/Patch${{ env.PATCH }}
