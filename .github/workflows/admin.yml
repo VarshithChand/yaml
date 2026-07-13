@@ -1,0 +1,68 @@
+name: Admin API CI
+
+on:
+  push:
+    branches:
+      - patch-cicd-demo
+
+    paths:
+      - 'Demo-Patch-CICD/src/AdminAPI/**'
+
+env:
+  CONFIG_FILE: Demo-Patch-CICD/config/patch.config
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Read Patch Configuration
+      shell: bash
+      run: |
+        echo "SPRINT=$(grep SPRINT $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
+        echo "PATCH=$(grep PATCH $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
+        echo "VERSION=$(grep VERSION $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
+
+    - name: Restore
+      run: |
+        dotnet restore Demo-Patch-CICD/src/AdminAPI/AdminAPI.csproj
+
+    - name: Build
+      run: |
+        dotnet build Demo-Patch-CICD/src/AdminAPI/AdminAPI.csproj \
+        --configuration Release \
+        --no-restore
+
+    - name: Test
+      run: |
+        dotnet test Demo-Patch-CICD/src/AdminAPI/AdminAPI.csproj \
+        --no-build
+
+    - name: Publish
+      run: |
+        dotnet publish Demo-Patch-CICD/src/AdminAPI/AdminAPI.csproj \
+        -c Release \
+        -o publish/AdminAPI
+
+    - name: Create Artifact Folder
+      shell: bash
+      run: |
+        mkdir -p artifacts/Sprint${SPRINT}/Patch${PATCH}
+        cp -r publish/AdminAPI/* artifacts/Sprint${SPRINT}/Patch${PATCH}/
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Admin_Sprint${{ env.SPRINT }}_Patch${{ env.PATCH }}
+        path: artifacts/Sprint${{ env.SPRINT }}/Patch${{ env.PATCH }}
