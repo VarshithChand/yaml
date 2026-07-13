@@ -7,13 +7,9 @@ on:
     branches:
       - master
       - patch-cicd-demo
-
     paths:
       - 'src/AdminAPI/**'
       - 'config/patch.config'
-
-    paths-ignore:
-      - 'artifacts/**'
 
 permissions:
   contents: write
@@ -22,7 +18,9 @@ env:
   CONFIG_FILE: config/patch.config
 
 jobs:
+
   build:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
 
     steps:
@@ -46,9 +44,9 @@ jobs:
 
       - name: Display Configuration
         run: |
-          echo "Sprint  : $SPRINT"
-          echo "Patch   : $PATCH"
-          echo "Version : $VERSION"
+          echo "Sprint : $SPRINT"
+          echo "Patch  : $PATCH"
+          echo "Version: $VERSION"
 
       - name: Restore
         run: dotnet restore src/AdminAPI/AdminAPI.csproj
@@ -69,11 +67,12 @@ jobs:
         run: |
           ls -R publish/AdminAPI
 
-      - name: Install zip
-        run: sudo apt-get update && sudo apt-get install -y zip
+      - name: Install Zip
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zip
 
-      - name: Create Artifact Structure
-        shell: bash
+      - name: Create Artifact Directories
         run: |
           mkdir -p artifacts/AdminAPI/New
           mkdir -p artifacts/AdminAPI/Old1
@@ -85,42 +84,46 @@ jobs:
 
           echo "Moving Old1 -> Old2"
 
-          rm -rf artifacts/AdminAPI/Old2/* || true
+          rm -rf artifacts/AdminAPI/Old2/*
 
-          if [ -d "artifacts/AdminAPI/Old1" ] && [ "$(ls -A artifacts/AdminAPI/Old1)" ]; then
+          if [ "$(ls -A artifacts/AdminAPI/Old1 2>/dev/null)" ]; then
             mv artifacts/AdminAPI/Old1/* artifacts/AdminAPI/Old2/
           fi
 
           echo "Moving New -> Old1"
 
-          if [ -d "artifacts/AdminAPI/New" ] && [ "$(ls -A artifacts/AdminAPI/New)" ]; then
+          if [ "$(ls -A artifacts/AdminAPI/New 2>/dev/null)" ]; then
             mv artifacts/AdminAPI/New/* artifacts/AdminAPI/Old1/
           fi
 
-      - name: Create Latest Artifact
-        shell: bash
+      - name: Create Latest Artifact Zip
         run: |
-          zip -r \
-          artifacts/AdminAPI/New/Admin_Sprint${SPRINT}_Patch${PATCH}.zip \
-          publish/AdminAPI
+          zip -r artifacts/AdminAPI/New/Admin_Sprint${SPRINT}_Patch${PATCH}.zip publish/AdminAPI
 
-      - name: Verify Repository Artifacts
+      - name: Verify Artifact Structure
         run: |
           echo "Repository Artifact Structure"
           ls -R artifacts
 
-      - name: Commit Repository Artifacts
+      - name: Commit Artifact History
         shell: bash
         run: |
 
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add artifacts
 
-          git diff --cached --quiet || git commit -m "AdminAPI Artifact Sprint ${SPRINT} Patch ${PATCH}"
+          if git diff --cached --quiet; then
+            echo "No artifact changes."
+            exit 0
+          fi
 
-          git push origin ${GITHUB_REF_NAME}
+          git commit -m "AdminAPI Artifact Sprint ${SPRINT} Patch ${PATCH}"
+
+          git pull --rebase origin ${GITHUB_REF_NAME}
+
+          git push origin HEAD:${GITHUB_REF_NAME}
 
       - name: Upload GitHub Artifact
         uses: actions/upload-artifact@v4
