@@ -152,47 +152,39 @@ jobs:
           artifacts/AdminAPI/New/Admin_Sprint${SPRINT}_Patch${PATCH}.zip \
           publish/AdminAPI
 
-      - name: Verify Artifact Structure
-        run: |
-          ls -R artifacts
-
       - name: Commit Artifact History
         shell: bash
         run: |
 
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
+         git config user.name "github-actions"
+         git config user.email "github-actions@github.com"
 
           # Checkout current branch
-          git checkout ${GITHUB_REF_NAME}
+         git checkout ${GITHUB_REF_NAME}
 
-          # Fetch latest changes
-          git fetch origin ${GITHUB_REF_NAME}
+         # Stage artifact changes FIRST
+         git add artifacts
 
-          # Pull latest changes
-          git pull --rebase origin ${GITHUB_REF_NAME}
-
-          git add artifacts
-
-          if git diff --cached --quiet; then
+         # Nothing changed?
+         if git diff --cached --quiet; then
             echo "No artifact changes."
             exit 0
-          fi
+         fi
 
-          git commit -m "AdminAPI Artifact Sprint ${SPRINT} Patch ${PATCH}"
+         # Commit local changes
+         git commit -m "AdminAPI Artifact Sprint ${SPRINT} Patch ${PATCH}"
 
-          for i in 1 2 3
-          do
-            if git push origin ${GITHUB_REF_NAME}; then
-              echo "Push Successful"
-              exit 0
-            fi
+         # Retry push if remote changed
+         for i in 1 2 3
+         do
+          if git pull --rebase origin ${GITHUB_REF_NAME} && \
+             git push origin ${GITHUB_REF_NAME}; then
+          echo "Push Successful"
+          exit 0
+         fi
+          echo "Retry $i..."
+          sleep 2
+         done
 
-            echo "Push failed. Retrying..."
-
-            git fetch origin ${GITHUB_REF_NAME}
-            git rebase origin/${GITHUB_REF_NAME}
-          done
-
-          echo "Push failed after 3 attempts."
-          exit 1
+         echo "Push failed after 3 attempts."
+         exit 1
