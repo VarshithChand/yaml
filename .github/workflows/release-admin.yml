@@ -2,45 +2,52 @@ name: Release Admin API
 
 on:
   workflow_dispatch:
-    inputs:
-      sprint:
-        description: "Sprint Number"
-        required: true
-        default: "73"
-      patch:
-        description: "Patch Number"
-        required: true
-        default: "01"
 
 jobs:
 
+  read_config:
+    name: Read Patch Configuration
+    runs-on: ubuntu-latest
+
+    outputs:
+      sprint: ${{ steps.config.outputs.sprint }}
+      patch: ${{ steps.config.outputs.patch }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: config
+        shell: bash
+        run: |
+          echo "sprint=$(grep SPRINT config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+          echo "patch=$(grep PATCH config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+
   deploy_rc:
     name: Deploy to RC
+    needs: read_config
     runs-on: ubuntu-latest
 
     environment:
       name: RC
 
     steps:
-      - name: Download Artifact
-        uses: actions/download-artifact@v4
+
+      - uses: actions/download-artifact@v4
         with:
-          name: Admin_Sprint${{ github.event.inputs.sprint }}_Patch${{ github.event.inputs.patch }}
+          name: Admin_Sprint${{ needs.read_config.outputs.sprint }}_Patch${{ needs.read_config.outputs.patch }}
           path: deploy
 
-      - name: Show Downloaded Files
+      - name: Show Artifact
         run: ls -R deploy
 
       - name: Create RC Folder
-        run: |
-          mkdir -p Demo-Patch-CICD/environments/RC
+        run: mkdir -p environments/RC
 
-      - name: Deploy to RC
-        run: |
-          cp -R deploy/. Demo-Patch-CICD/environments/RC/
+      - name: Deploy RC
+        run: cp -R deploy/. environments/RC/
 
   deploy_cluster01:
-    name: Deploy to Cluster01
+    name: Deploy Cluster01
     needs: deploy_rc
     runs-on: ubuntu-latest
 
@@ -48,22 +55,18 @@ jobs:
       name: Cluster01
 
     steps:
-      - name: Download Artifact
-        uses: actions/download-artifact@v4
+
+      - uses: actions/download-artifact@v4
         with:
-          name: Admin_Sprint${{ github.event.inputs.sprint }}_Patch${{ github.event.inputs.patch }}
+          name: Admin_Sprint${{ needs.read_config.outputs.sprint }}_Patch${{ needs.read_config.outputs.patch }}
           path: deploy
 
-      - name: Create Cluster01 Folder
-        run: |
-          mkdir -p Demo-Patch-CICD/environments/Cluster01
+      - run: mkdir -p environments/Cluster01
 
-      - name: Deploy to Cluster01
-        run: |
-          cp -R deploy/. Demo-Patch-CICD/environments/Cluster01/
+      - run: cp -R deploy/. environments/Cluster01/
 
   deploy_cluster02:
-    name: Deploy to Cluster02
+    name: Deploy Cluster02
     needs: deploy_cluster01
     runs-on: ubuntu-latest
 
@@ -71,22 +74,18 @@ jobs:
       name: Cluster02
 
     steps:
-      - name: Download Artifact
-        uses: actions/download-artifact@v4
+
+      - uses: actions/download-artifact@v4
         with:
-          name: Admin_Sprint${{ github.event.inputs.sprint }}_Patch${{ github.event.inputs.patch }}
+          name: Admin_Sprint${{ needs.read_config.outputs.sprint }}_Patch${{ needs.read_config.outputs.patch }}
           path: deploy
 
-      - name: Create Cluster02 Folder
-        run: |
-          mkdir -p Demo-Patch-CICD/environments/Cluster02
+      - run: mkdir -p environments/Cluster02
 
-      - name: Deploy to Cluster02
-        run: |
-          cp -R deploy/. Demo-Patch-CICD/environments/Cluster02/
+      - run: cp -R deploy/. environments/Cluster02/
 
   deploy_cluster03:
-    name: Deploy to Cluster03
+    name: Deploy Cluster03
     needs: deploy_cluster02
     runs-on: ubuntu-latest
 
@@ -94,16 +93,12 @@ jobs:
       name: Cluster03
 
     steps:
-      - name: Download Artifact
-        uses: actions/download-artifact@v4
+
+      - uses: actions/download-artifact@v4
         with:
-          name: Admin_Sprint${{ github.event.inputs.sprint }}_Patch${{ github.event.inputs.patch }}
+          name: Admin_Sprint${{ needs.read_config.outputs.sprint }}_Patch${{ needs.read_config.outputs.patch }}
           path: deploy
 
-      - name: Create Cluster03 Folder
-        run: |
-          mkdir -p Demo-Patch-CICD/environments/Cluster03
+      - run: mkdir -p environments/Cluster03
 
-      - name: Deploy to Cluster03
-        run: |
-          cp -R deploy/. Demo-Patch-CICD/environments/Cluster03/
+      - run: cp -R deploy/. environments/Cluster03/

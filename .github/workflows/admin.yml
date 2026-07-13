@@ -33,7 +33,7 @@ jobs:
         run: |
           echo "SPRINT=$(grep SPRINT $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
           echo "PATCH=$(grep PATCH $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
-          echo "VERSION=$(grep VERSION $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=$(grep RELEASE_VERSION $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
 
       - name: Restore
         run: |
@@ -57,8 +57,16 @@ jobs:
           mkdir -p artifacts/Sprint${SPRINT}/Patch${PATCH}
           cp -R publish/AdminAPI/. artifacts/Sprint${SPRINT}/Patch${PATCH}/
 
+<<<<<<< HEAD
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: Admin_Sprint${{ env.SPRINT }}_Patch${{ env.PATCH }}
         path: artifacts/Sprint${{ env.SPRINT }}/Patch${{ env.PATCH }}
+=======
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Admin_Sprint${{ env.SPRINT }}_Patch${{ env.PATCH }}
+          path: artifacts/Sprint${{ env.SPRINT }}/Patch${{ env.PATCH }}
+>>>>>>> 64e11888818c8a83bed740e930834f49506d57f5
