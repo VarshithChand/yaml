@@ -172,7 +172,8 @@ jobs:
          fi
 
          # Commit local changes
-         git commit -m "AdminAPI Artifact Sprint ${SPRINT} Patch ${PATCH}"
+         TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S UTC")
+         git commit -m "AdminAPI Artifact | Sprint ${SPRINT} | Patch ${PATCH} | ${TIMESTAMP}"
 
          # Retry push if remote changed
          for i in 1 2 3
