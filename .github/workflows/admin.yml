@@ -7,11 +7,16 @@ on:
     branches:
       - master
       - patch-cicd-demo
+
     paths:
       - 'src/AdminAPI/**'
       - 'config/patch.config'
-      - '!.artifacts/**'
-      - '!artifacts/**'
+
+    paths-ignore:
+      - 'artifacts/**'
+
+permissions:
+  contents: write
 
 env:
   CONFIG_FILE: config/patch.config
@@ -39,6 +44,12 @@ jobs:
           echo "PATCH=$(grep '^PATCH=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
           echo "VERSION=$(grep '^VERSION=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
 
+      - name: Display Configuration
+        run: |
+          echo "Sprint  : $SPRINT"
+          echo "Patch   : $PATCH"
+          echo "Version : $VERSION"
+
       - name: Restore
         run: dotnet restore src/AdminAPI/AdminAPI.csproj
 
@@ -46,7 +57,7 @@ jobs:
         run: dotnet build src/AdminAPI/AdminAPI.csproj --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test src/AdminAPI/AdminAPI.csproj --no-build
+        run: dotnet test src/AdminAPI/AdminAPI.csproj --no-build --verbosity normal
 
       - name: Publish
         run: |
@@ -54,83 +65,67 @@ jobs:
             -c Release \
             -o publish/AdminAPI
 
-      ###########################################################
-      # Create Repository Artifact Structure
-      ###########################################################
+      - name: Verify Publish Output
+        run: |
+          ls -R publish/AdminAPI
 
-      - name: Create Artifact Folders
+      - name: Install zip
+        run: sudo apt-get update && sudo apt-get install -y zip
+
+      - name: Create Artifact Structure
         shell: bash
         run: |
           mkdir -p artifacts/AdminAPI/New
           mkdir -p artifacts/AdminAPI/Old1
           mkdir -p artifacts/AdminAPI/Old2
 
-      ###########################################################
-      # Rotate Old Builds
-      ###########################################################
-
       - name: Rotate Previous Artifacts
         shell: bash
         run: |
 
-          rm -rf artifacts/AdminAPI/Old2/*
-          cp -R artifacts/AdminAPI/Old1/. artifacts/AdminAPI/Old2/ 2>/dev/null || true
+          echo "Moving Old1 -> Old2"
 
-          rm -rf artifacts/AdminAPI/Old1/*
-          cp -R artifacts/AdminAPI/New/. artifacts/AdminAPI/Old1/ 2>/dev/null || true
+          rm -rf artifacts/AdminAPI/Old2/* || true
 
-          rm -rf artifacts/AdminAPI/New/*
+          if [ -d "artifacts/AdminAPI/Old1" ] && [ "$(ls -A artifacts/AdminAPI/Old1)" ]; then
+            mv artifacts/AdminAPI/Old1/* artifacts/AdminAPI/Old2/
+          fi
 
-      ###########################################################
-      # Copy Latest Build
-      ###########################################################
+          echo "Moving New -> Old1"
 
-      - name: Copy Latest Build
+          if [ -d "artifacts/AdminAPI/New" ] && [ "$(ls -A artifacts/AdminAPI/New)" ]; then
+            mv artifacts/AdminAPI/New/* artifacts/AdminAPI/Old1/
+          fi
+
+      - name: Create Latest Artifact
         shell: bash
         run: |
-          cp -R publish/AdminAPI/. artifacts/AdminAPI/New/
+          zip -r \
+          artifacts/AdminAPI/New/Admin_Sprint${SPRINT}_Patch${PATCH}.zip \
+          publish/AdminAPI
 
-      ###########################################################
-      # Zip Latest Build
-      ###########################################################
-
-      - name: Create ZIP
-        shell: bash
+      - name: Verify Repository Artifacts
         run: |
-          cd artifacts/AdminAPI/New
-          zip -r ../Admin_Sprint${SPRINT}_Patch${PATCH}.zip .
-
-      ###########################################################
-      # Verify
-      ###########################################################
-
-      - name: Show Repository Artifacts
-        run: |
+          echo "Repository Artifact Structure"
           ls -R artifacts
 
-      ###########################################################
-      # Commit Updated Repository Artifacts
-      ###########################################################
-
-      - name: Commit Artifact History
+      - name: Commit Repository Artifacts
         shell: bash
         run: |
+
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
           git add artifacts
 
-          git commit -m "Update AdminAPI artifact history" || echo "Nothing to commit"
+          git diff --cached --quiet || git commit -m "AdminAPI Artifact Sprint ${SPRINT} Patch ${PATCH}"
 
-          git push origin HEAD:${{ github.ref_name }}
+          git push origin ${GITHUB_REF_NAME}
 
-      ###########################################################
-      # Upload GitHub Artifact
-      ###########################################################
-
-      - name: Upload Artifact
+      - name: Upload GitHub Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Admin_Sprint${{ env.SPRINT }}_Patch${{ env.PATCH }}
-          path: artifacts/AdminAPI/Admin_Sprint${{ env.SPRINT }}_Patch${{ env.PATCH }}.zip
+          path: artifacts/AdminAPI/New/Admin_Sprint${{ env.SPRINT }}_Patch${{ env.PATCH }}.zip
+          if-no-files-found: error
           retention-days: 30
