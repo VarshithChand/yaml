@@ -147,48 +147,66 @@ jobs:
           fi
 
       - name: Create Latest Artifact
+        shell: bash
         run: |
+          TIMESTAMP=$(TZ=Asia/Kolkata date +"%Y%m%d_%H%M%S")
+          ARTIFACT_NAME="Admin_Sprint${SPRINT}_Patch${PATCH}_${TIMESTAMP}.zip"
+          echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> $GITHUB_ENV
           zip -r \
-          artifacts/AdminAPI/New/Admin_Sprint${SPRINT}_Patch${PATCH}.zip \
-          publish/AdminAPI
+            artifacts/AdminAPI/New/${ARTIFACT_NAME} \
+            publish/AdminAPI
+
+      - name: Create Latest Artifact
+        shell: bash
+        run: |
+          TIMESTAMP=$(TZ=Asia/Kolkata date +"%Y%m%d_%H%M%S")
+          ARTIFACT_NAME="Admin_Sprint${SPRINT}_Patch${PATCH}_${TIMESTAMP}.zip"
+
+          echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> $GITHUB_ENV
+
+          zip -r \
+            artifacts/AdminAPI/New/${ARTIFACT_NAME} \
+            publish/AdminAPI
 
       - name: Commit Artifact History
         shell: bash
         run: |
-        
+
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
-          # Checkout current branch
           git checkout ${GITHUB_REF_NAME}
 
-          # Stage artifact changes
           git add artifacts
 
-          # Nothing changed?
           if git diff --cached --quiet; then
             echo "No artifact changes."
             exit 0
           fi
 
-          # Timestamp (IST)
           TIMESTAMP=$(TZ=Asia/Kolkata date +"%Y-%m-%d %H:%M:%S IST")
 
-          # Commit
           git commit -m "AdminAPI Artifact | Sprint ${SPRINT} | Patch ${PATCH} | ${TIMESTAMP}"
 
-          # Retry push if remote changed
           for i in 1 2 3
           do
             if git pull --rebase origin ${GITHUB_REF_NAME} && \
                git push origin ${GITHUB_REF_NAME}; then
-               echo "Push Successful"
-            exit 0
+              echo "Push Successful"
+              exit 0
             fi
 
-          echo "Retry $i..."
-          sleep 2
+            echo "Retry $i..."
+            sleep 2
           done
 
           echo "Push failed after 3 attempts."
           exit 1
+
+      - name: Upload GitHub Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: artifacts/AdminAPI/New/${{ env.ARTIFACT_NAME }}
+          retention-days: 30
+          if-no-files-found: error
