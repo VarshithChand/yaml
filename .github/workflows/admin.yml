@@ -128,6 +128,25 @@ jobs:
           mkdir -p artifacts/AdminAPI/Old1
           mkdir -p artifacts/AdminAPI/Old2
 
+      - name: Configure Git
+        shell: bash
+        run: |
+          git config user.name "sam"
+          git config user.email "sam@github-actions.local"
+          git checkout ${GITHUB_REF_NAME}
+
+      - name: Capture Previous Commit Messages
+        shell: bash
+        run: |
+          NEW_MSG=$(git log -1 --format=%s -- artifacts/AdminAPI/New 2>/dev/null)
+          OLD1_MSG=$(git log -1 --format=%s -- artifacts/AdminAPI/Old1 2>/dev/null)
+
+          [ -z "$NEW_MSG" ] && NEW_MSG="No previous artifact"
+          [ -z "$OLD1_MSG" ] && OLD1_MSG="No previous artifact"
+
+          echo "NEW_MSG=$NEW_MSG" >> $GITHUB_ENV
+          echo "OLD1_MSG=$OLD1_MSG" >> $GITHUB_ENV
+
       - name: Rotate Existing Artifacts
         shell: bash
         run: |
@@ -144,6 +163,26 @@ jobs:
             mv artifacts/AdminAPI/New/* artifacts/AdminAPI/Old1/
           fi
 
+      - name: Commit Old2 Rotation
+        shell: bash
+        run: |
+          git add artifacts/AdminAPI/Old2
+          if git diff --cached --quiet; then
+            echo "No Old2 changes."
+          else
+            git commit -m "Old2 <= ${OLD1_MSG}"
+          fi
+
+      - name: Commit Old1 Rotation
+        shell: bash
+        run: |
+          git add artifacts/AdminAPI/Old1
+          if git diff --cached --quiet; then
+            echo "No Old1 changes."
+          else
+            git commit -m "Old1 <= ${NEW_MSG}"
+          fi
+
       - name: Create Latest Artifact
         shell: bash
         run: |
@@ -158,22 +197,21 @@ jobs:
       - name: Verify Artifact Structure
         run: ls -R artifacts/AdminAPI
 
-      - name: Commit Artifact History
+      - name: Commit New Artifact
         shell: bash
         run: |
-          git config user.name "sam"
-          git config user.email "sam@github-actions.local"
-          git checkout ${GITHUB_REF_NAME}
-          git add artifacts
-
+          git add artifacts/AdminAPI/New
           if git diff --cached --quiet; then
-            echo "No artifact changes."
+            echo "No New artifact changes."
             exit 0
           fi
 
           TIMESTAMP=$(TZ=Asia/Kolkata date +"%Y-%m-%d %H:%M:%S IST")
           git commit -m "AdminAPI Artifact | Sprint ${SPRINT} | Patch ${PATCH} | ${TIMESTAMP}"
 
+      - name: Push Commits
+        shell: bash
+        run: |
           for i in 1 2 3
           do
             if git pull --rebase origin ${GITHUB_REF_NAME} && \
