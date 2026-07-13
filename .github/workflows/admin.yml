@@ -19,34 +19,53 @@ env:
 
 jobs:
 
-  build:
+  read_config:
+    name: Read Patch Configuration
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
+
+    outputs:
+      sprint: ${{ steps.config.outputs.sprint }}
+      patch: ${{ steps.config.outputs.patch }}
+      version: ${{ steps.config.outputs.version }}
 
     steps:
 
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Read Patch Configuration
+      - id: config
         shell: bash
         run: |
-          echo "SPRINT=$(grep '^SPRINT=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
-          echo "PATCH=$(grep '^PATCH=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
-          echo "VERSION=$(grep '^VERSION=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
+          echo "sprint=$(grep '^SPRINT=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+          echo "patch=$(grep '^PATCH=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+          echo "version=$(grep '^VERSION=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_OUTPUT
 
       - name: Display Configuration
         run: |
-          echo "Sprint : $SPRINT"
-          echo "Patch  : $PATCH"
-          echo "Version: $VERSION"
+          echo "Sprint : ${{ steps.config.outputs.sprint }}"
+          echo "Patch  : ${{ steps.config.outputs.patch }}"
+          echo "Version: ${{ steps.config.outputs.version }}"
+
+  build:
+    name: Build Admin API
+    needs: read_config
+    runs-on: ubuntu-latest
+
+    env:
+      SPRINT: ${{ needs.read_config.outputs.sprint }}
+      PATCH: ${{ needs.read_config.outputs.patch }}
+      VERSION: ${{ needs.read_config.outputs.version }}
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
 
       - name: Restore
         run: dotnet restore src/AdminAPI/AdminAPI.csproj
@@ -60,31 +79,61 @@ jobs:
       - name: Publish
         run: |
           dotnet publish src/AdminAPI/AdminAPI.csproj \
-            -c Release \
-            -o publish/AdminAPI
+          -c Release \
+          -o publish/AdminAPI
 
       - name: Verify Publish Output
-        run: |
-          ls -R publish/AdminAPI
+        run: ls -R publish/AdminAPI
+
+      - name: Upload Publish Files
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-files
+          path: publish/AdminAPI
+
+  artifact_management:
+    name: Rotate & Store Artifacts
+    needs:
+      - read_config
+      - build
+
+    runs-on: ubuntu-latest
+
+    env:
+      SPRINT: ${{ needs.read_config.outputs.sprint }}
+      PATCH: ${{ needs.read_config.outputs.patch }}
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Publish Files
+        uses: actions/download-artifact@v4
+        with:
+          name: publish-files
+          path: publish/AdminAPI
 
       - name: Install Zip
         run: |
           sudo apt-get update
           sudo apt-get install -y zip
 
-      - name: Create Artifact Directories
+      - name: Create Artifact Folder Structure
         run: |
           mkdir -p artifacts/AdminAPI/New
           mkdir -p artifacts/AdminAPI/Old1
           mkdir -p artifacts/AdminAPI/Old2
 
-      - name: Rotate Previous Artifacts
+      - name: Rotate Existing Artifacts
         shell: bash
         run: |
 
           echo "Moving Old1 -> Old2"
 
-          rm -rf artifacts/AdminAPI/Old2/*
+          rm -rf artifacts/AdminAPI/Old2/* || true
 
           if [ "$(ls -A artifacts/AdminAPI/Old1 2>/dev/null)" ]; then
             mv artifacts/AdminAPI/Old1/* artifacts/AdminAPI/Old2/
@@ -96,39 +145,36 @@ jobs:
             mv artifacts/AdminAPI/New/* artifacts/AdminAPI/Old1/
           fi
 
-      - name: Create Latest Artifact Zip
+      - name: Create Latest Artifact
         run: |
-          zip -r artifacts/AdminAPI/New/Admin_Sprint${SPRINT}_Patch${PATCH}.zip publish/AdminAPI
+          zip -r \
+          artifacts/AdminAPI/New/Admin_Sprint${SPRINT}_Patch${PATCH}.zip \
+          publish/AdminAPI
 
       - name: Verify Artifact Structure
         run: |
-          echo "Repository Artifact Structure"
           ls -R artifacts
 
       - name: Commit Artifact History
         shell: bash
         run: |
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
 
           git add artifacts
 
-          if git diff --cached --quiet; then
+          if ! git diff --cached --quiet; then
+            git commit -m "AdminAPI Artifact Sprint ${SPRINT} Patch ${PATCH}"
+            git push origin ${GITHUB_REF_NAME}
+          else
             echo "No artifact changes."
-            exit 0
           fi
-
-          git commit -m "AdminAPI Artifact Sprint ${SPRINT} Patch ${PATCH}"
-
-          git pull --rebase origin ${GITHUB_REF_NAME}
-
-          git push origin HEAD:${GITHUB_REF_NAME}
 
       - name: Upload GitHub Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Admin_Sprint${{ env.SPRINT }}_Patch${{ env.PATCH }}
           path: artifacts/AdminAPI/New/Admin_Sprint${{ env.SPRINT }}_Patch${{ env.PATCH }}.zip
-          if-no-files-found: error
           retention-days: 30
+          if-no-files-found: error
