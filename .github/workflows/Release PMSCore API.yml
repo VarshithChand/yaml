@@ -1,0 +1,281 @@
+name: Release PMSCore API
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_rc:
+        description: "Deploy to RC"
+        type: boolean
+        required: true
+        default: true
+
+      deploy_cluster01:
+        description: "Deploy Cluster01"
+        type: boolean
+        required: true
+        default: true
+
+      deploy_cluster02:
+        description: "Deploy Cluster02"
+        type: boolean
+        required: true
+        default: true
+
+      deploy_cluster03:
+        description: "Deploy Cluster03"
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pmscore-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+
+###############################################################
+# Read Configuration
+###############################################################
+
+  read_config:
+
+    name: Read Patch Configuration
+
+    runs-on: ubuntu-latest
+
+    outputs:
+      sprint: ${{ steps.config.outputs.sprint }}
+      patch: ${{ steps.config.outputs.patch }}
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - id: config
+        shell: bash
+        run: |
+
+          echo "Branch : $GITHUB_REF_NAME"
+
+          echo "sprint=$(grep '^SPRINT=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+          echo "patch=$(grep '^PATCH=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+
+      - name: Display Configuration
+
+        run: |
+
+          echo "Branch : $GITHUB_REF_NAME"
+          echo "Sprint : ${{ steps.config.outputs.sprint }}"
+          echo "Patch  : ${{ steps.config.outputs.patch }}"
+
+###############################################################
+# Deploy RC
+###############################################################
+
+  deploy_rc:
+
+    if: ${{ inputs.deploy_rc }}
+
+    name: Deploy RC
+
+    needs: read_config
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: RC
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Get Latest Artifact
+
+        shell: bash
+
+        run: |
+
+          mkdir -p deploy
+
+          LATEST=$(ls -t artifacts/PMSCoreAPI/New/*.zip | head -1)
+
+          echo "Artifact : $LATEST"
+
+          cp "$LATEST" deploy/
+
+      - name: Verify Package
+
+        run: ls -R deploy
+
+      - name: Deploy RC
+
+        run: |
+
+          mkdir -p environments/RC
+
+          cp -R deploy/. environments/RC/
+
+###############################################################
+# Deploy Cluster01
+###############################################################
+
+  deploy_cluster01:
+
+    if: ${{ inputs.deploy_cluster01 }}
+
+    name: Deploy Cluster01
+
+    needs: read_config
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: Production
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Get Latest Artifact
+
+        run: |
+
+          mkdir -p deploy
+
+          LATEST=$(ls -t artifacts/PMSCoreAPI/New/*.zip | head -1)
+
+          echo "Artifact : $LATEST"
+
+          cp "$LATEST" deploy/
+
+      - name: Deploy Cluster01
+
+        run: |
+
+          mkdir -p environments/Cluster01
+
+          cp -R deploy/. environments/Cluster01/
+
+###############################################################
+# Deploy Cluster02
+###############################################################
+
+  deploy_cluster02:
+
+    if: ${{ inputs.deploy_cluster02 }}
+
+    name: Deploy Cluster02
+
+    needs: read_config
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: Production
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Get Latest Artifact
+
+        run: |
+
+          mkdir -p deploy
+
+          LATEST=$(ls -t artifacts/PMSCoreAPI/New/*.zip | head -1)
+
+          echo "Artifact : $LATEST"
+
+          cp "$LATEST" deploy/
+
+      - name: Deploy Cluster02
+
+        run: |
+
+          mkdir -p environments/Cluster02
+
+          cp -R deploy/. environments/Cluster02/
+
+###############################################################
+# Deploy Cluster03
+###############################################################
+
+  deploy_cluster03:
+
+    if: ${{ inputs.deploy_cluster03 }}
+
+    name: Deploy Cluster03
+
+    needs: read_config
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: Production
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Get Latest Artifact
+
+        run: |
+
+          mkdir -p deploy
+
+          LATEST=$(ls -t artifacts/PMSCoreAPI/New/*.zip | head -1)
+
+          echo "Artifact : $LATEST"
+
+          cp "$LATEST" deploy/
+
+      - name: Deploy Cluster03
+
+        run: |
+
+          mkdir -p environments/Cluster03
+
+          cp -R deploy/. environments/Cluster03/
+
+###############################################################
+# Release Summary
+###############################################################
+
+  release_complete:
+
+    name: Release Completed
+
+    needs:
+      - read_config
+      - deploy_rc
+      - deploy_cluster01
+      - deploy_cluster02
+      - deploy_cluster03
+
+    if: always()
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Release Summary
+
+        run: |
+
+          echo "========================================="
+          echo "PMSCore API Release Summary"
+          echo "========================================="
+          echo "Branch : $GITHUB_REF_NAME"
+          echo "Sprint : ${{ needs.read_config.outputs.sprint }}"
+          echo "Patch  : ${{ needs.read_config.outputs.patch }}"
+          echo ""
+          echo "Deploy RC         : ${{ inputs.deploy_rc }}"
+          echo "Deploy Cluster01  : ${{ inputs.deploy_cluster01 }}"
+          echo "Deploy Cluster02  : ${{ inputs.deploy_cluster02 }}"
+          echo "Deploy Cluster03  : ${{ inputs.deploy_cluster03 }}"
+          echo "========================================="
