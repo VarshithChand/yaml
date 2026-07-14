@@ -14,7 +14,7 @@ permissions:
   contents: write
 
 env:
-  CONFIG_FILE: Demo-Patch-CICD/config/patch.config
+  CONFIG_FILE: config/patch.config
 
 jobs:
 
@@ -67,17 +67,17 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Restore
-        run: dotnet restore Demo-Patch-CICD/src/PMSCoreAPI/PMSCoreAPI.csproj
+        run: dotnet restore src/PMSCoreAPI/PMSCoreAPI.csproj
 
       - name: Build
-        run: dotnet build Demo-Patch-CICD/src/PMSCoreAPI/PMSCoreAPI.csproj --configuration Release --no-restore
+        run: dotnet build src/PMSCoreAPI/PMSCoreAPI.csproj --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test Demo-Patch-CICD/src/PMSCoreAPI/PMSCoreAPI.csproj --no-build --verbosity normal
+        run: dotnet test src/PMSCoreAPI/PMSCoreAPI.csproj --no-build --verbosity normal
 
       - name: Publish
         run: |
-          dotnet publish Demo-Patch-CICD/src/PMSCoreAPI/PMSCoreAPI.csproj \
+          dotnet publish src/PMSCoreAPI/PMSCoreAPI.csproj \
           -c Release \
           -o publish/PMSCoreAPI
 
