@@ -1,52 +1,255 @@
 name: Security API CI
 
 on:
+  workflow_dispatch:
+
   push:
     branches:
-      - patch-cicd-demo
-
+      - S_21_P2
     paths:
-      - 'Demo-Patch-CICD/src/SecurityAPI/**'
+      - 'src/SecurityAPI/**'
+      - 'config/patch.config'
+
+permissions:
+  contents: write
 
 env:
-  CONFIG_FILE: Demo-Patch-CICD/config/patch.config
+  CONFIG_FILE: config/patch.config
 
 jobs:
 
-  build:
-
+  read_config:
+    name: Read Patch Configuration
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
+
+    outputs:
+      sprint: ${{ steps.config.outputs.sprint }}
+      patch: ${{ steps.config.outputs.patch }}
+      version: ${{ steps.config.outputs.version }}
 
     steps:
 
-    - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '8.0.x'
+      - id: config
+        shell: bash
+        run: |
+          echo "sprint=$(grep '^SPRINT=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+          echo "patch=$(grep '^PATCH=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+          echo "version=$(grep '^VERSION=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_OUTPUT
 
-    - name: Read Patch Configuration
-      shell: bash
-      run: |
-        echo "SPRINT=$(grep SPRINT $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
-        echo "PATCH=$(grep PATCH $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
-        echo "VERSION=$(grep VERSION $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_ENV
+      - name: Display Configuration
+        run: |
+          echo "Sprint : ${{ steps.config.outputs.sprint }}"
+          echo "Patch  : ${{ steps.config.outputs.patch }}"
+          echo "Version: ${{ steps.config.outputs.version }}"
 
-    - run: dotnet restore Demo-Patch-CICD/src/SecurityAPI/SecurityAPI.csproj
+  build:
+    name: Build Security API
+    needs: read_config
+    runs-on: ubuntu-latest
 
-    - run: dotnet build Demo-Patch-CICD/src/SecurityAPI/SecurityAPI.csproj --configuration Release --no-restore
+    env:
+      SPRINT: ${{ needs.read_config.outputs.sprint }}
+      PATCH: ${{ needs.read_config.outputs.patch }}
+      VERSION: ${{ needs.read_config.outputs.version }}
 
-    - run: dotnet test Demo-Patch-CICD/src/SecurityAPI/SecurityAPI.csproj --no-build
+    steps:
 
-    - run: dotnet publish Demo-Patch-CICD/src/SecurityAPI/SecurityAPI.csproj -c Release -o publish/SecurityAPI
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Create Artifact Folder
-      shell: bash
-      run: |
-        mkdir -p artifacts/Sprint${SPRINT}/Patch${PATCH}
-        cp -r publish/SecurityAPI/* artifacts/Sprint${SPRINT}/Patch${PATCH}/
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
 
-    - uses: actions/upload-artifact@v4
-      with:
-        name: Security_Sprint${{ env.SPRINT }}_Patch${{ env.PATCH }}
-        path: artifacts/Sprint${{ env.SPRINT }}/Patch${{ env.PATCH }}
+      - name: Restore
+        run: dotnet restore src/SecurityAPI/SecurityAPI.csproj
+
+      - name: Build
+        run: dotnet build src/SecurityAPI/SecurityAPI.csproj --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test src/SecurityAPI/SecurityAPI.csproj --no-build --verbosity normal
+
+      - name: Publish
+        run: |
+          dotnet publish src/SecurityAPI/SecurityAPI.csproj \
+          -c Release \
+          -o publish/SecurityAPI
+
+      - name: Verify Publish Output
+        run: ls -R publish/SecurityAPI
+
+      - name: Upload Publish Files
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-files
+          path: publish/SecurityAPI
+
+  artifact_management:
+    name: Rotate & Store Artifacts
+    needs:
+      - read_config
+      - build
+
+    concurrency:
+      group: security-api-artifact-${{ github.ref }}
+      cancel-in-progress: false
+
+    runs-on: ubuntu-latest
+
+    env:
+      SPRINT: ${{ needs.read_config.outputs.sprint }}
+      PATCH: ${{ needs.read_config.outputs.patch }}
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Download Publish Files
+        uses: actions/download-artifact@v4
+        with:
+          name: publish-files
+          path: publish/SecurityAPI
+
+      - name: Install Zip
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zip
+
+      - name: Ensure Artifact Folder Structure
+        shell: bash
+        run: |
+          mkdir -p artifacts/SecurityAPI/New
+          mkdir -p artifacts/SecurityAPI/Old1
+          mkdir -p artifacts/SecurityAPI/Old2
+
+      - name: Configure Git
+        shell: bash
+        run: |
+          git config user.name "sam"
+          git config user.email "sam@github-actions.local"
+          git checkout ${GITHUB_REF_NAME}
+
+      - name: Sync With Remote
+        shell: bash
+        run: |
+          # This job runs one-at-a-time (see concurrency group above), so
+          # this is guaranteed to be the latest state before we start
+          # rotating/committing. We never rebase after this point, so binary
+          # zip renames can never conflict.
+          git fetch origin ${GITHUB_REF_NAME}
+          git reset --hard origin/${GITHUB_REF_NAME}
+
+      - name: Capture Previous Commit Messages
+        shell: bash
+        run: |
+          NEW_MSG=$(git log -1 --format=%s -- artifacts/SecurityAPI/New 2>/dev/null)
+          OLD1_MSG=$(git log -1 --format=%s -- artifacts/SecurityAPI/Old1 2>/dev/null)
+
+          [ -z "$NEW_MSG" ] && NEW_MSG="No previous artifact"
+          [ -z "$OLD1_MSG" ] && OLD1_MSG="No previous artifact"
+
+          echo "NEW_MSG=$NEW_MSG" >> $GITHUB_ENV
+          echo "OLD1_MSG=$OLD1_MSG" >> $GITHUB_ENV
+
+      - name: Rotate Existing Artifacts
+        shell: bash
+        run: |
+          echo "Clearing Old2"
+          rm -rf artifacts/SecurityAPI/Old2/*
+
+          echo "Moving Old1 -> Old2"
+          if [ "$(ls -A artifacts/SecurityAPI/Old1 2>/dev/null)" ]; then
+            mv artifacts/SecurityAPI/Old1/* artifacts/SecurityAPI/Old2/
+          fi
+
+          echo "Moving New -> Old1"
+          if [ "$(ls -A artifacts/SecurityAPI/New 2>/dev/null)" ]; then
+            mv artifacts/SecurityAPI/New/* artifacts/SecurityAPI/Old1/
+          fi
+
+      - name: Commit Old2 Rotation
+        shell: bash
+        run: |
+          git add artifacts/SecurityAPI/Old2
+          if git diff --cached --quiet; then
+            echo "No Old2 changes."
+          else
+            git commit -m "Old2 <= ${OLD1_MSG}"
+          fi
+
+      - name: Commit Old1 Rotation
+        shell: bash
+        run: |
+          git add artifacts/SecurityAPI/Old1
+          if git diff --cached --quiet; then
+            echo "No Old1 changes."
+          else
+            git commit -m "Old1 <= ${NEW_MSG}"
+          fi
+
+      - name: Create Latest Artifact
+        shell: bash
+        run: |
+          TIMESTAMP=$(TZ=Asia/Kolkata date +"%Y%m%d_%H%M%S")
+          ARTIFACT_NAME="Security_Sprint${SPRINT}_Patch${PATCH}_${TIMESTAMP}.zip"
+          echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> $GITHUB_ENV
+
+          zip -r \
+            artifacts/SecurityAPI/New/${ARTIFACT_NAME} \
+            publish/SecurityAPI
+
+      - name: Verify Artifact Structure
+        run: ls -R artifacts/SecurityAPI
+
+      - name: Commit New Artifact
+        shell: bash
+        run: |
+          git add artifacts/SecurityAPI/New
+          if git diff --cached --quiet; then
+            echo "No New artifact changes."
+            exit 0
+          fi
+
+          TIMESTAMP=$(TZ=Asia/Kolkata date +"%Y-%m-%d %H:%M:%S IST")
+          git commit -m "SecurityAPI Artifact | Sprint ${SPRINT} | Patch ${PATCH} | ${TIMESTAMP}"
+
+      - name: Push Commits
+        shell: bash
+        run: |
+          # No rebase here on purpose: rebasing replays commits that rename
+          # binary zip files, which Git cannot auto-merge. The concurrency
+          # group plus "Sync With Remote" already guarantee we're pushing on
+          # top of the true latest commit, so a plain push should always be
+          # a fast-forward. We still retry a few times for transient network
+          # issues only.
+          for i in 1 2 3
+          do
+            if git push origin ${GITHUB_REF_NAME}; then
+              echo "Push Successful"
+              exit 0
+            fi
+            echo "Push rejected or failed. Fetching latest and retrying ($i)..."
+            git fetch origin ${GITHUB_REF_NAME}
+            sleep 2
+          done
+
+          echo "Push failed after 3 attempts. Another run may have written to the branch outside this workflow's concurrency group."
+          exit 1
+
+      - name: Upload GitHub Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SecurityAPI-Latest
+          path: artifacts/SecurityAPI/New/${{ env.ARTIFACT_NAME }}
+          retention-days: 30
+          if-no-files-found: error
