@@ -1,0 +1,58 @@
+name: Revert Admin API Artifact
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Reason for running the revert"
+        required: false
+        default: "Manual Run"
+
+  push:
+    branches:
+      - S_21_P3
+    paths:
+      - "artifacts/AdminAPI/**"
+
+jobs:
+  revert-admin-artifact:
+    name: Revert Admin API Artifact
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Show Trigger Information
+        run: |
+          echo "Workflow Triggered"
+          echo "Event        : ${{ github.event_name }}"
+          echo "Branch       : ${{ github.ref_name }}"
+          echo "Actor        : ${{ github.actor }}"
+          echo "Commit       : ${{ github.sha }}"
+          echo "Reason       : ${{ github.event.inputs.reason }}"
+
+      - name: List AdminAPI Artifacts
+        run: |
+          echo "Listing artifacts/AdminAPI"
+          ls -R artifacts/AdminAPI
+
+      # -----------------------------
+      # Add your existing revert steps below
+      # Example:
+      #
+      # - name: Restore Previous Artifact
+      #   run: |
+      #     echo "Restore previous AdminAPI artifact here"
+      #
+      # - name: Commit Reverted Artifact
+      #   run: |
+      #     git config user.name "github-actions"
+      #     git config user.email "github-actions@github.com"
+      #     git add artifacts/AdminAPI
+      #     git commit -m "Revert AdminAPI Artifact"
+      #     git push
+      # -----------------------------
