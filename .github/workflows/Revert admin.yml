@@ -1,0 +1,172 @@
+name: Revert Admin API Artifact
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'Which stored artifact do you want to restore as the current (New) build?'
+        required: true
+        type: choice
+        options:
+          - Old1
+          - Old2
+
+permissions:
+  contents: write
+
+jobs:
+
+  revert_artifact:
+    name: Revert Artifact
+    runs-on: ubuntu-latest
+
+    concurrency:
+      group: admin-api-artifact-${{ github.ref }}
+      cancel-in-progress: false
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Validate Selected Artifact Exists
+        shell: bash
+        run: |
+          SOURCE="${{ inputs.source }}"
+          if [ -z "$(ls -A artifacts/AdminAPI/${SOURCE} 2>/dev/null)" ]; then
+            echo "No artifact found in artifacts/AdminAPI/${SOURCE}. Nothing to revert to."
+            exit 1
+          fi
+          echo "Reverting to artifact in: artifacts/AdminAPI/${SOURCE}"
+          ls -R artifacts/AdminAPI/${SOURCE}
+
+      - name: Configure Git
+        shell: bash
+        run: |
+          git config user.name "sam"
+          git config user.email "sam@github-actions.local"
+          git checkout ${GITHUB_REF_NAME}
+
+      - name: Sync With Remote
+        shell: bash
+        run: |
+          git fetch origin ${GITHUB_REF_NAME}
+          git reset --hard origin/${GITHUB_REF_NAME}
+
+      - name: Capture Current Commit Messages
+        shell: bash
+        run: |
+          NEW_MSG=$(git log -1 --format=%s -- artifacts/AdminAPI/New 2>/dev/null)
+          OLD1_MSG=$(git log -1 --format=%s -- artifacts/AdminAPI/Old1 2>/dev/null)
+          OLD2_MSG=$(git log -1 --format=%s -- artifacts/AdminAPI/Old2 2>/dev/null)
+
+          [ -z "$NEW_MSG" ] && NEW_MSG="No previous artifact"
+          [ -z "$OLD1_MSG" ] && OLD1_MSG="No previous artifact"
+          [ -z "$OLD2_MSG" ] && OLD2_MSG="No previous artifact"
+
+          echo "NEW_MSG=$NEW_MSG" >> $GITHUB_ENV
+          echo "OLD1_MSG=$OLD1_MSG" >> $GITHUB_ENV
+          echo "OLD2_MSG=$OLD2_MSG" >> $GITHUB_ENV
+
+      - name: Stage Current Slots
+        shell: bash
+        run: |
+          rm -rf /tmp/stage_new /tmp/stage_old1 /tmp/stage_old2
+          mkdir -p /tmp/stage_new /tmp/stage_old1 /tmp/stage_old2
+
+          cp -a artifacts/AdminAPI/New/. /tmp/stage_new/ 2>/dev/null || true
+          cp -a artifacts/AdminAPI/Old1/. /tmp/stage_old1/ 2>/dev/null || true
+          cp -a artifacts/AdminAPI/Old2/. /tmp/stage_old2/ 2>/dev/null || true
+
+      - name: Reorder Artifacts
+        shell: bash
+        run: |
+          SOURCE="${{ inputs.source }}"
+
+          if [ "$SOURCE" == "Old1" ]; then
+            # Old1 becomes New. Current New is demoted to Old1. Old2 untouched.
+            rm -rf artifacts/AdminAPI/New/* artifacts/AdminAPI/Old1/*
+            cp -a /tmp/stage_old1/. artifacts/AdminAPI/New/
+            cp -a /tmp/stage_new/.  artifacts/AdminAPI/Old1/
+          else
+            # Old2 becomes New. Current New demoted to Old1. Current Old1 demoted to Old2.
+            rm -rf artifacts/AdminAPI/New/* artifacts/AdminAPI/Old1/* artifacts/AdminAPI/Old2/*
+            cp -a /tmp/stage_old2/. artifacts/AdminAPI/New/
+            cp -a /tmp/stage_new/.  artifacts/AdminAPI/Old1/
+            cp -a /tmp/stage_old1/. artifacts/AdminAPI/Old2/
+          fi
+
+      - name: Verify Reordered Structure
+        run: ls -R artifacts/AdminAPI
+
+      - name: Commit Old2 Change
+        shell: bash
+        run: |
+          git add artifacts/AdminAPI/Old2
+          if git diff --cached --quiet; then
+            echo "No Old2 changes."
+          else
+            SOURCE="${{ inputs.source }}"
+            if [ "$SOURCE" == "Old2" ]; then
+              git commit -m "Revert: Old2 <= ${OLD1_MSG}"
+            else
+              git commit -m "Revert: Old2 unchanged (${OLD2_MSG})"
+            fi
+          fi
+
+      - name: Commit Old1 Change
+        shell: bash
+        run: |
+          git add artifacts/AdminAPI/Old1
+          if git diff --cached --quiet; then
+            echo "No Old1 changes."
+          else
+            git commit -m "Revert: Old1 <= ${NEW_MSG}"
+          fi
+
+      - name: Commit New Change
+        shell: bash
+        run: |
+          git add artifacts/AdminAPI/New
+          if git diff --cached --quiet; then
+            echo "No New changes."
+            exit 0
+          fi
+
+          SOURCE="${{ inputs.source }}"
+          if [ "$SOURCE" == "Old1" ]; then
+            RESTORED_MSG="${OLD1_MSG}"
+          else
+            RESTORED_MSG="${OLD2_MSG}"
+          fi
+
+          TIMESTAMP=$(TZ=Asia/Kolkata date +"%Y-%m-%d %H:%M:%S IST")
+          git commit -m "Revert: New <= ${SOURCE} (${RESTORED_MSG}) | Reverted ${TIMESTAMP}"
+
+      - name: Push Commits
+        shell: bash
+        run: |
+          for i in 1 2 3
+          do
+            if git push origin ${GITHUB_REF_NAME}; then
+              echo "Push Successful"
+              exit 0
+            fi
+            echo "Push rejected or failed. Fetching latest and retrying ($i)..."
+            git fetch origin ${GITHUB_REF_NAME}
+            sleep 2
+          done
+
+          echo "Push failed after 3 attempts. Another run may have written to the branch outside this workflow's concurrency group."
+          exit 1
+
+      - name: Upload Reverted Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AdminAPI-Reverted
+          path: artifacts/AdminAPI/New
+          retention-days: 30
+          if-no-files-found: error
