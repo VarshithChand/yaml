@@ -305,7 +305,7 @@ jobs:
     runs-on: ubuntu-latest
 
     environment:
-      name: Production
+      name: Cluster01
 
     strategy:
       fail-fast: false
@@ -360,7 +360,7 @@ jobs:
     runs-on: ubuntu-latest
 
     environment:
-      name: Production
+      name: Cluster02
 
     strategy:
       fail-fast: false
@@ -415,7 +415,7 @@ jobs:
     runs-on: ubuntu-latest
 
     environment:
-      name: Production
+      name: Cluster03
 
     strategy:
       fail-fast: false
