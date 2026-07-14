@@ -5,7 +5,7 @@ on:
     inputs:
 
 ###############################################################
-# Select one, two, or all three APIs
+# Admin API
 ###############################################################
 
       svc_admin:
@@ -14,11 +14,39 @@ on:
         required: true
         default: true
 
+      admin_version:
+        description: "Admin - Artifact Version"
+        type: choice
+        required: true
+        default: New
+        options:
+          - New
+          - Old1
+          - Old2
+
+###############################################################
+# PMSCore API
+###############################################################
+
       svc_pmscore:
         description: "Release PMSCore API"
         type: boolean
         required: true
         default: false
+
+      pmscore_version:
+        description: "PMSCore - Artifact Version"
+        type: choice
+        required: true
+        default: New
+        options:
+          - New
+          - Old1
+          - Old2
+
+###############################################################
+# Security API
+###############################################################
 
       svc_security:
         description: "Release Security API"
@@ -26,12 +54,8 @@ on:
         required: true
         default: false
 
-###############################################################
-# Artifact version (applies to every selected API)
-###############################################################
-
-      artifact:
-        description: "Select Artifact Version"
+      security_version:
+        description: "Security - Artifact Version"
         type: choice
         required: true
         default: New
@@ -78,7 +102,7 @@ concurrency:
 jobs:
 
 ###############################################################
-# Read Config + Build the list of selected services
+# Read Config + Build list of selected services & versions
 ###############################################################
 
   read_config:
@@ -112,7 +136,7 @@ jobs:
           echo "patch=$(grep '^PATCH=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
 
 ###############################################################
-# Build matrix from the ticked checkboxes
+# Build matrix -- each selected service carries its OWN version
 ###############################################################
 
       - id: matrix
@@ -123,14 +147,23 @@ jobs:
           SELECTED=""
 
           add() {
+            # $1 = display name, $2 = artifact folder, $3 = chosen version
             [ -n "$ITEMS" ] && ITEMS="${ITEMS},"
-            ITEMS="${ITEMS}{\"name\":\"$1\",\"dir\":\"$2\"}"
-            SELECTED="${SELECTED}$1 "
+            ITEMS="${ITEMS}{\"name\":\"$1\",\"dir\":\"$2\",\"version\":\"$3\"}"
+            SELECTED="${SELECTED}$1=$3 "
           }
 
-          if [ "${{ inputs.svc_admin }}"    = "true" ]; then add "Admin"    "AdminAPI";    fi
-          if [ "${{ inputs.svc_pmscore }}"  = "true" ]; then add "PMSCore"  "PMSCoreAPI";  fi
-          if [ "${{ inputs.svc_security }}" = "true" ]; then add "Security" "SecurityAPI"; fi
+          if [ "${{ inputs.svc_admin }}" = "true" ]; then
+            add "Admin" "AdminAPI" "${{ inputs.admin_version }}"
+          fi
+
+          if [ "${{ inputs.svc_pmscore }}" = "true" ]; then
+            add "PMSCore" "PMSCoreAPI" "${{ inputs.pmscore_version }}"
+          fi
+
+          if [ "${{ inputs.svc_security }}" = "true" ]; then
+            add "Security" "SecurityAPI" "${{ inputs.security_version }}"
+          fi
 
           if [ -z "$ITEMS" ]; then
             echo "No API selected. Tick at least one service."
@@ -143,18 +176,18 @@ jobs:
           echo "selected=${SELECTED}" >> $GITHUB_OUTPUT
 
 ###############################################################
-# Verify every selected service actually has the chosen version
+# Verify each selected service has its chosen version
 ###############################################################
 
       - name: Verify Selected Artifacts Exist
         shell: bash
         run: |
 
-          set -e
           MISSING=0
 
           check() {
-            FOLDER="artifacts/$1/${{ inputs.artifact }}"
+            # $1 = artifact folder, $2 = chosen version
+            FOLDER="artifacts/$1/$2"
             FILE=$(ls -t ${FOLDER}/*.zip 2>/dev/null | head -1)
 
             if [ -z "$FILE" ]; then
@@ -165,12 +198,20 @@ jobs:
             fi
           }
 
-          if [ "${{ inputs.svc_admin }}"    = "true" ]; then check "AdminAPI";    fi
-          if [ "${{ inputs.svc_pmscore }}"  = "true" ]; then check "PMSCoreAPI";  fi
-          if [ "${{ inputs.svc_security }}" = "true" ]; then check "SecurityAPI"; fi
+          if [ "${{ inputs.svc_admin }}" = "true" ]; then
+            check "AdminAPI" "${{ inputs.admin_version }}"
+          fi
+
+          if [ "${{ inputs.svc_pmscore }}" = "true" ]; then
+            check "PMSCoreAPI" "${{ inputs.pmscore_version }}"
+          fi
+
+          if [ "${{ inputs.svc_security }}" = "true" ]; then
+            check "SecurityAPI" "${{ inputs.security_version }}"
+          fi
 
           if [ "$MISSING" = "1" ]; then
-            echo "One or more selected services have no ${{ inputs.artifact }} artifact."
+            echo "One or more selected services have no artifact for the chosen version."
             exit 1
           fi
 
@@ -179,21 +220,20 @@ jobs:
 
           echo "========================================="
           echo "Branch   : $GITHUB_REF_NAME"
-          echo "Services : ${{ steps.matrix.outputs.selected }}"
-          echo "Version  : ${{ inputs.artifact }}"
+          echo "Selected : ${{ steps.matrix.outputs.selected }}"
           echo "Sprint   : ${{ steps.config.outputs.sprint }}"
           echo "Patch    : ${{ steps.config.outputs.patch }}"
           echo "========================================="
 
 ###############################################################
-# Deploy RC  (one leg per selected API)
+# Deploy RC  (one leg per selected API, each with its own version)
 ###############################################################
 
   deploy_rc:
 
     if: ${{ inputs.deploy_rc }}
 
-    name: Deploy RC - ${{ matrix.name }}
+    name: Deploy RC - ${{ matrix.name }} (${{ matrix.version }})
 
     needs: read_config
 
@@ -214,12 +254,15 @@ jobs:
         shell: bash
         run: |
 
-          FOLDER="artifacts/${{ matrix.dir }}/${{ inputs.artifact }}"
+          FOLDER="artifacts/${{ matrix.dir }}/${{ matrix.version }}"
 
           mkdir -p deploy
           LATEST=$(ls -t ${FOLDER}/*.zip | head -1)
 
+          echo "Service  : ${{ matrix.name }}"
+          echo "Version  : ${{ matrix.version }}"
           echo "Artifact : $LATEST"
+
           cp "$LATEST" deploy/
 
       - name: Verify Package
@@ -232,7 +275,7 @@ jobs:
           rm -rf "environments/RC/${{ matrix.dir }}"/*
           cp -R deploy/. "environments/RC/${{ matrix.dir }}/"
 
-          echo "${{ matrix.name }} (${{ inputs.artifact }}) deployed to RC"
+          echo "${{ matrix.name }} (${{ matrix.version }}) deployed to RC"
 
 ###############################################################
 # Deploy Cluster01
@@ -242,7 +285,7 @@ jobs:
 
     if: ${{ inputs.deploy_cluster01 }}
 
-    name: Deploy Cluster01 - ${{ matrix.name }}
+    name: Deploy Cluster01 - ${{ matrix.name }} (${{ matrix.version }})
 
     needs: read_config
 
@@ -263,7 +306,7 @@ jobs:
         shell: bash
         run: |
 
-          FOLDER="artifacts/${{ matrix.dir }}/${{ inputs.artifact }}"
+          FOLDER="artifacts/${{ matrix.dir }}/${{ matrix.version }}"
 
           mkdir -p deploy
           LATEST=$(ls -t ${FOLDER}/*.zip | head -1)
@@ -278,7 +321,7 @@ jobs:
           rm -rf "environments/Cluster01/${{ matrix.dir }}"/*
           cp -R deploy/. "environments/Cluster01/${{ matrix.dir }}/"
 
-          echo "${{ matrix.name }} (${{ inputs.artifact }}) deployed to Cluster01"
+          echo "${{ matrix.name }} (${{ matrix.version }}) deployed to Cluster01"
 
 ###############################################################
 # Deploy Cluster02
@@ -288,7 +331,7 @@ jobs:
 
     if: ${{ inputs.deploy_cluster02 }}
 
-    name: Deploy Cluster02 - ${{ matrix.name }}
+    name: Deploy Cluster02 - ${{ matrix.name }} (${{ matrix.version }})
 
     needs: read_config
 
@@ -309,7 +352,7 @@ jobs:
         shell: bash
         run: |
 
-          FOLDER="artifacts/${{ matrix.dir }}/${{ inputs.artifact }}"
+          FOLDER="artifacts/${{ matrix.dir }}/${{ matrix.version }}"
 
           mkdir -p deploy
           LATEST=$(ls -t ${FOLDER}/*.zip | head -1)
@@ -324,7 +367,7 @@ jobs:
           rm -rf "environments/Cluster02/${{ matrix.dir }}"/*
           cp -R deploy/. "environments/Cluster02/${{ matrix.dir }}/"
 
-          echo "${{ matrix.name }} (${{ inputs.artifact }}) deployed to Cluster02"
+          echo "${{ matrix.name }} (${{ matrix.version }}) deployed to Cluster02"
 
 ###############################################################
 # Deploy Cluster03
@@ -334,7 +377,7 @@ jobs:
 
     if: ${{ inputs.deploy_cluster03 }}
 
-    name: Deploy Cluster03 - ${{ matrix.name }}
+    name: Deploy Cluster03 - ${{ matrix.name }} (${{ matrix.version }})
 
     needs: read_config
 
@@ -355,7 +398,7 @@ jobs:
         shell: bash
         run: |
 
-          FOLDER="artifacts/${{ matrix.dir }}/${{ inputs.artifact }}"
+          FOLDER="artifacts/${{ matrix.dir }}/${{ matrix.version }}"
 
           mkdir -p deploy
           LATEST=$(ls -t ${FOLDER}/*.zip | head -1)
@@ -370,7 +413,7 @@ jobs:
           rm -rf "environments/Cluster03/${{ matrix.dir }}"/*
           cp -R deploy/. "environments/Cluster03/${{ matrix.dir }}/"
 
-          echo "${{ matrix.name }} (${{ inputs.artifact }}) deployed to Cluster03"
+          echo "${{ matrix.name }} (${{ matrix.version }}) deployed to Cluster03"
 
 ###############################################################
 # Release Summary
@@ -400,10 +443,10 @@ jobs:
           echo "API Release Summary"
           echo "========================================="
           echo "Branch   : $GITHUB_REF_NAME"
-          echo "Services : ${{ needs.read_config.outputs.selected }}"
-          echo "Version  : ${{ inputs.artifact }}"
           echo "Sprint   : ${{ needs.read_config.outputs.sprint }}"
           echo "Patch    : ${{ needs.read_config.outputs.patch }}"
+          echo ""
+          echo "Released : ${{ needs.read_config.outputs.selected }}"
           echo ""
           echo "Deploy RC        : ${{ needs.deploy_rc.result }}"
           echo "Deploy Cluster01 : ${{ needs.deploy_cluster01.result }}"
