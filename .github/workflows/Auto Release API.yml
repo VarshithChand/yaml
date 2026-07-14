@@ -1,0 +1,406 @@
+name: Auto Release API
+
+###############################################################
+# Flow
+#
+#   New artifact committed to artifacts/<Service>/New/
+#            |
+#            v
+#   [ Build & Stage ]        <-- automatic, NO approval
+#            |
+#            v
+#   [ Deploy RC ]            <-- WAITS FOR APPROVAL
+#            |
+#            v
+#   [ Cluster01 ] [ Cluster02 ] [ Cluster03 ]   <-- each WAITS FOR APPROVAL
+#
+###############################################################
+
+on:
+  push:
+    branches:
+      - S_21_P3
+    paths:
+      - 'artifacts/AdminAPI/New/**'
+      - 'artifacts/PMSCoreAPI/New/**'
+      - 'artifacts/SecurityAPI/New/**'
+
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Service"
+        type: choice
+        required: true
+        default: Admin
+        options:
+          - Admin
+          - PMSCore
+          - Security
+
+      version:
+        description: "Artifact Version"
+        type: choice
+        required: true
+        default: New
+        options:
+          - New
+          - Old1
+          - Old2
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auto-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+
+###############################################################
+# STAGE 1 -- Build & Stage  (AUTOMATIC, no approval)
+#
+# Detects which service's artifact changed, pulls it, unzips it,
+# validates it, and parks it in Staging ready to go.
+###############################################################
+
+  stage:
+
+    name: Build & Stage
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: Staging
+
+    outputs:
+      service: ${{ steps.detect.outputs.service }}
+      dir: ${{ steps.detect.outputs.dir }}
+      version: ${{ steps.detect.outputs.version }}
+      artifact: ${{ steps.pick.outputs.artifact }}
+      sprint: ${{ steps.config.outputs.sprint }}
+      patch: ${{ steps.config.outputs.patch }}
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+###############################################################
+# Read patch.config
+###############################################################
+
+      - id: config
+        shell: bash
+        run: |
+
+          echo "sprint=$(grep '^SPRINT=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+          echo "patch=$(grep '^PATCH=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+
+###############################################################
+# Detect which service triggered this
+#
+# push   -> whichever artifacts/<Service>/New/ folder changed
+# manual -> whatever was selected in the form
+###############################################################
+
+      - id: detect
+        shell: bash
+        run: |
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+
+            CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} \
+              | grep -E '^artifacts/(AdminAPI|PMSCoreAPI|SecurityAPI)/New/' | head -1) || true
+
+            case "$CHANGED" in
+              artifacts/AdminAPI/New/*)     SERVICE="Admin";    DIR="AdminAPI" ;;
+              artifacts/PMSCoreAPI/New/*)   SERVICE="PMSCore";  DIR="PMSCoreAPI" ;;
+              artifacts/SecurityAPI/New/*)  SERVICE="Security"; DIR="SecurityAPI" ;;
+              *)
+                echo "Could not determine which service changed."
+                exit 1
+                ;;
+            esac
+
+            # A push always releases the artifact that was just created
+            VERSION="New"
+
+          else
+
+            SERVICE="${{ inputs.service }}"
+            VERSION="${{ inputs.version }}"
+
+            case "$SERVICE" in
+              Admin)    DIR="AdminAPI" ;;
+              PMSCore)  DIR="PMSCoreAPI" ;;
+              Security) DIR="SecurityAPI" ;;
+            esac
+
+          fi
+
+          echo "Service : $SERVICE"
+          echo "Version : $VERSION"
+
+          echo "service=$SERVICE" >> $GITHUB_OUTPUT
+          echo "dir=$DIR"         >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+###############################################################
+# Pick the artifact
+###############################################################
+
+      - id: pick
+        shell: bash
+        run: |
+
+          FOLDER="artifacts/${{ steps.detect.outputs.dir }}/${{ steps.detect.outputs.version }}"
+
+          # '|| true' -- steps run with 'bash -e -o pipefail', so a non-matching
+          # glob would abort with a bare exit code 2 instead of the message below.
+          FILE=$(ls -t ${FOLDER}/*.zip 2>/dev/null | head -1) || true
+
+          if [ -z "$FILE" ]; then
+            echo "No artifact found in ${FOLDER}."
+            exit 1
+          fi
+
+          echo "Artifact : $FILE"
+          echo "artifact=$FILE" >> $GITHUB_OUTPUT
+
+###############################################################
+# Build / prepare the deployable package
+###############################################################
+
+      - name: Prepare Package
+        shell: bash
+        run: |
+
+          mkdir -p staging
+          unzip -o "${{ steps.pick.outputs.artifact }}" -d staging
+
+          echo "Package prepared."
+          ls -R staging
+
+      - name: Validate Package
+        shell: bash
+        run: |
+
+          if [ -z "$(ls -A staging)" ]; then
+            echo "Staging package is empty."
+            exit 1
+          fi
+
+          echo "Package validated."
+
+      - name: Staging Summary
+        run: |
+
+          echo "========================================="
+          echo "STAGED AND READY"
+          echo "========================================="
+          echo "Service  : ${{ steps.detect.outputs.service }}"
+          echo "Version  : ${{ steps.detect.outputs.version }}"
+          echo "Sprint   : ${{ steps.config.outputs.sprint }}"
+          echo "Patch    : ${{ steps.config.outputs.patch }}"
+          echo "Artifact : ${{ steps.pick.outputs.artifact }}"
+          echo "========================================="
+          echo "Waiting for RC approval..."
+          echo "========================================="
+
+###############################################################
+# Hand the exact same package to every downstream job
+###############################################################
+
+      - name: Upload Staged Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: StagedPackage
+          path: staging
+          retention-days: 30
+          if-no-files-found: error
+
+###############################################################
+# STAGE 2 -- Deploy RC  (WAITS FOR APPROVAL)
+###############################################################
+
+  deploy_rc:
+
+    name: Deploy RC - ${{ needs.stage.outputs.service }}
+
+    needs: stage
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: RC
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Download Staged Package
+        uses: actions/download-artifact@v4
+        with:
+          name: StagedPackage
+          path: staging
+
+      - name: Deploy RC
+        run: |
+
+          mkdir -p "environments/RC/${{ needs.stage.outputs.dir }}"
+          rm -rf "environments/RC/${{ needs.stage.outputs.dir }}"/*
+          cp -R staging/. "environments/RC/${{ needs.stage.outputs.dir }}/"
+
+          echo "${{ needs.stage.outputs.service }} (${{ needs.stage.outputs.version }}) deployed to RC"
+          ls -R "environments/RC/${{ needs.stage.outputs.dir }}"
+
+###############################################################
+# STAGE 3 -- Cluster01  (WAITS FOR APPROVAL)
+###############################################################
+
+  deploy_cluster01:
+
+    name: Deploy Cluster01 - ${{ needs.stage.outputs.service }}
+
+    needs:
+      - stage
+      - deploy_rc
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: Cluster01
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Download Staged Package
+        uses: actions/download-artifact@v4
+        with:
+          name: StagedPackage
+          path: staging
+
+      - name: Deploy Cluster01
+        run: |
+
+          mkdir -p "environments/Cluster01/${{ needs.stage.outputs.dir }}"
+          rm -rf "environments/Cluster01/${{ needs.stage.outputs.dir }}"/*
+          cp -R staging/. "environments/Cluster01/${{ needs.stage.outputs.dir }}/"
+
+          echo "${{ needs.stage.outputs.service }} deployed to Cluster01"
+
+###############################################################
+# STAGE 3 -- Cluster02  (WAITS FOR APPROVAL)
+###############################################################
+
+  deploy_cluster02:
+
+    name: Deploy Cluster02 - ${{ needs.stage.outputs.service }}
+
+    needs:
+      - stage
+      - deploy_rc
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: Cluster02
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Download Staged Package
+        uses: actions/download-artifact@v4
+        with:
+          name: StagedPackage
+          path: staging
+
+      - name: Deploy Cluster02
+        run: |
+
+          mkdir -p "environments/Cluster02/${{ needs.stage.outputs.dir }}"
+          rm -rf "environments/Cluster02/${{ needs.stage.outputs.dir }}"/*
+          cp -R staging/. "environments/Cluster02/${{ needs.stage.outputs.dir }}/"
+
+          echo "${{ needs.stage.outputs.service }} deployed to Cluster02"
+
+###############################################################
+# STAGE 3 -- Cluster03  (WAITS FOR APPROVAL)
+###############################################################
+
+  deploy_cluster03:
+
+    name: Deploy Cluster03 - ${{ needs.stage.outputs.service }}
+
+    needs:
+      - stage
+      - deploy_rc
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: Cluster03
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Download Staged Package
+        uses: actions/download-artifact@v4
+        with:
+          name: StagedPackage
+          path: staging
+
+      - name: Deploy Cluster03
+        run: |
+
+          mkdir -p "environments/Cluster03/${{ needs.stage.outputs.dir }}"
+          rm -rf "environments/Cluster03/${{ needs.stage.outputs.dir }}"/*
+          cp -R staging/. "environments/Cluster03/${{ needs.stage.outputs.dir }}/"
+
+          echo "${{ needs.stage.outputs.service }} deployed to Cluster03"
+
+###############################################################
+# Summary
+###############################################################
+
+  summary:
+
+    name: Release Summary
+
+    needs:
+      - stage
+      - deploy_rc
+      - deploy_cluster01
+      - deploy_cluster02
+      - deploy_cluster03
+
+    if: always()
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Summary
+        run: |
+
+          echo "========================================="
+          echo "Release Summary"
+          echo "========================================="
+          echo "Trigger   : ${{ github.event_name }}"
+          echo "Service   : ${{ needs.stage.outputs.service }}"
+          echo "Version   : ${{ needs.stage.outputs.version }}"
+          echo "Sprint    : ${{ needs.stage.outputs.sprint }}"
+          echo "Patch     : ${{ needs.stage.outputs.patch }}"
+          echo "Artifact  : ${{ needs.stage.outputs.artifact }}"
+          echo ""
+          echo "Staging   : ${{ needs.stage.result }}"
+          echo "RC        : ${{ needs.deploy_rc.result }}"
+          echo "Cluster01 : ${{ needs.deploy_cluster01.result }}"
+          echo "Cluster02 : ${{ needs.deploy_cluster02.result }}"
+          echo "Cluster03 : ${{ needs.deploy_cluster03.result }}"
+          echo "========================================="
