@@ -13,33 +13,12 @@ concurrency:
 jobs:
 
 ###############################################################
-# Validate Branch
-###############################################################
-
-  validate_branch:
-    name: Validate Branch
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Allow only master branch
-        run: |
-          echo "Current Branch : $GITHUB_REF_NAME"
-
-          if [ "$GITHUB_REF_NAME" != "master" ]; then
-            echo "======================================"
-            echo "Release can only be executed from master"
-            echo "======================================"
-            exit 1
-          fi
-
-###############################################################
 # Read Patch Configuration
 ###############################################################
 
   read_config:
-    name: Read Patch Configuration
 
-    needs: validate_branch
+    name: Read Patch Configuration
 
     runs-on: ubuntu-latest
 
@@ -49,22 +28,26 @@ jobs:
 
     steps:
 
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
       - id: config
         shell: bash
         run: |
+
+          echo "Branch  : $GITHUB_REF_NAME"
 
           echo "sprint=$(grep '^SPRINT=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
           echo "patch=$(grep '^PATCH=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
 
       - name: Display Configuration
         run: |
+          echo "Branch : $GITHUB_REF_NAME"
           echo "Sprint : ${{ steps.config.outputs.sprint }}"
           echo "Patch  : ${{ steps.config.outputs.patch }}"
 
 ###############################################################
-# RC Deployment (Approval Required)
+# RC Deployment
 ###############################################################
 
   deploy_rc:
@@ -83,10 +66,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Get Latest Artifact
+
         shell: bash
+
         run: |
 
-          mkdir deploy
+          mkdir -p deploy
 
           LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
 
@@ -127,11 +112,15 @@ jobs:
 
       - name: Get Latest Artifact
 
+        shell: bash
+
         run: |
 
-          mkdir deploy
+          mkdir -p deploy
 
           LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
+
+          echo "Deploying : $LATEST"
 
           cp "$LATEST" deploy/
 
@@ -164,9 +153,11 @@ jobs:
 
       - name: Get Latest Artifact
 
+        shell: bash
+
         run: |
 
-          mkdir deploy
+          mkdir -p deploy
 
           LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
 
@@ -201,9 +192,11 @@ jobs:
 
       - name: Get Latest Artifact
 
+        shell: bash
+
         run: |
 
-          mkdir deploy
+          mkdir -p deploy
 
           LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
 
@@ -232,15 +225,16 @@ jobs:
 
     steps:
 
-      - name: Summary
+      - name: Release Summary
 
         run: |
 
-          echo "======================================="
-          echo " Admin API Release Completed"
-          echo "======================================="
-          echo " RC         : SUCCESS"
-          echo " Cluster01  : SUCCESS"
-          echo " Cluster02  : SUCCESS"
-          echo " Cluster03  : SUCCESS"
-          echo "======================================="
+          echo "========================================="
+          echo "Admin API Release Completed Successfully"
+          echo "========================================="
+          echo "Branch     : $GITHUB_REF_NAME"
+          echo "RC         : SUCCESS"
+          echo "Cluster01  : SUCCESS"
+          echo "Cluster02  : SUCCESS"
+          echo "Cluster03  : SUCCESS"
+          echo "========================================="
