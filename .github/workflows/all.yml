@@ -3,7 +3,7 @@ name: Release All APIs
 on:
   push:
     branches:
-      - patch-cicd-demo
+      - S_21_P2
     paths:
       - "artifacts/AdminAPI/New/**"
       - "artifacts/PMSCoreAPI/New/**"
