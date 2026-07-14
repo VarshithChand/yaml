@@ -1,24 +1,15 @@
 {
   "version": 2,
-  "dgSpecHash": "XxBsCzw5Ryw=",
+  "dgSpecHash": "Zw7bjB9DGNM=",
   "success": true,
-  "projectFilePath": "C:\\Users\\v.vuyyuru.intern\\Desktop\\yml\\AspNetCore.Docs.Samples\\Demo-Patch-CICD\\src\\AdminAPI\\AdminAPI.csproj",
+  "projectFilePath": "C:\\Users\\v.vuyyuru.intern\\Desktop\\yml\\Demo-Patch-CICD\\src\\AdminAPI\\AdminAPI.csproj",
   "expectedPackageFiles": [
-    "C:\\Users\\v.vuyyuru.intern\\.nuget\\packages\\microsoft.aspnetcore.openapi\\10.0.9\\microsoft.aspnetcore.openapi.10.0.9.nupkg.sha512",
-    "C:\\Users\\v.vuyyuru.intern\\.nuget\\packages\\microsoft.openapi\\2.0.0\\microsoft.openapi.2.0.0.nupkg.sha512"
+    "C:\\Users\\v.vuyyuru.intern\\.nuget\\packages\\microsoft.extensions.apidescription.server\\9.0.0\\microsoft.extensions.apidescription.server.9.0.0.nupkg.sha512",
+    "C:\\Users\\v.vuyyuru.intern\\.nuget\\packages\\microsoft.openapi\\1.6.23\\microsoft.openapi.1.6.23.nupkg.sha512",
+    "C:\\Users\\v.vuyyuru.intern\\.nuget\\packages\\swashbuckle.aspnetcore\\9.0.3\\swashbuckle.aspnetcore.9.0.3.nupkg.sha512",
+    "C:\\Users\\v.vuyyuru.intern\\.nuget\\packages\\swashbuckle.aspnetcore.swagger\\9.0.3\\swashbuckle.aspnetcore.swagger.9.0.3.nupkg.sha512",
+    "C:\\Users\\v.vuyyuru.intern\\.nuget\\packages\\swashbuckle.aspnetcore.swaggergen\\9.0.3\\swashbuckle.aspnetcore.swaggergen.9.0.3.nupkg.sha512",
+    "C:\\Users\\v.vuyyuru.intern\\.nuget\\packages\\swashbuckle.aspnetcore.swaggerui\\9.0.3\\swashbuckle.aspnetcore.swaggerui.9.0.3.nupkg.sha512"
   ],
-  "logs": [
-    {
-      "code": "NU1903",
-      "level": "Warning",
-      "message": "Package 'Microsoft.OpenApi' 2.0.0 has a known high severity vulnerability, https://github.com/advisories/GHSA-v5pm-xwqc-g5wc",
-      "projectPath": "C:\\Users\\v.vuyyuru.intern\\Desktop\\yml\\AspNetCore.Docs.Samples\\Demo-Patch-CICD\\src\\AdminAPI\\AdminAPI.csproj",
-      "warningLevel": 1,
-      "filePath": "C:\\Users\\v.vuyyuru.intern\\Desktop\\yml\\AspNetCore.Docs.Samples\\Demo-Patch-CICD\\src\\AdminAPI\\AdminAPI.csproj",
-      "libraryId": "Microsoft.OpenApi",
-      "targetGraphs": [
-        "net10.0"
-      ]
-    }
-  ]
+  "logs": []
 }

@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AdminAPI/AdminAPI.csproj" />
+    <Project Path="src/PMSCoreAPI/PMSCoreAPI.csproj" />
+    <Project Path="src/SecurityAPI/SecurityAPI.csproj" />
+  </Folder>
+</Solution>
