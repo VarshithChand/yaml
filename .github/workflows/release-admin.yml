@@ -3,6 +3,9 @@ name: Release Admin API
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
 
   read_config:
@@ -14,13 +17,23 @@ jobs:
       patch: ${{ steps.config.outputs.patch }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
       - id: config
         shell: bash
         run: |
-          echo "sprint=$(grep SPRINT config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
-          echo "patch=$(grep PATCH config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+          echo "sprint=$(grep '^SPRINT=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+          echo "patch=$(grep '^PATCH=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+
+      - name: Display Patch Information
+        run: |
+          echo "Sprint : ${{ steps.config.outputs.sprint }}"
+          echo "Patch  : ${{ steps.config.outputs.patch }}"
+
+###############################################################
+# RC Deployment (Approval Required)
+###############################################################
 
   deploy_rc:
     name: Deploy to RC
@@ -32,19 +45,33 @@ jobs:
 
     steps:
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: Admin_Sprint${{ needs.read_config.outputs.sprint }}_Patch${{ needs.read_config.outputs.patch }}
-          path: deploy
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      - name: Show Artifact
-        run: ls -R deploy
+      - name: Get Latest Admin Artifact
+        shell: bash
+        run: |
+          mkdir -p deploy
 
-      - name: Create RC Folder
-        run: mkdir -p environments/RC
+          LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
 
-      - name: Deploy RC
-        run: cp -R deploy/. environments/RC/
+          echo "Latest Artifact:"
+          echo "$LATEST"
+
+          cp "$LATEST" deploy/
+
+      - name: Verify Deployment Package
+        run: |
+          ls -R deploy
+
+      - name: Deploy to RC
+        run: |
+          mkdir -p environments/RC
+          cp -R deploy/. environments/RC/
+
+###############################################################
+# Cluster01 (Approval Required)
+###############################################################
 
   deploy_cluster01:
     name: Deploy Cluster01
@@ -52,18 +79,29 @@ jobs:
     runs-on: ubuntu-latest
 
     environment:
-      name: Cluster01
+      name: Production
 
     steps:
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: Admin_Sprint${{ needs.read_config.outputs.sprint }}_Patch${{ needs.read_config.outputs.patch }}
-          path: deploy
+      - uses: actions/checkout@v4
 
-      - run: mkdir -p environments/Cluster01
+      - name: Get Latest Admin Artifact
+        shell: bash
+        run: |
+          mkdir -p deploy
 
-      - run: cp -R deploy/. environments/Cluster01/
+          LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
+
+          cp "$LATEST" deploy/
+
+      - name: Deploy Cluster01
+        run: |
+          mkdir -p environments/Cluster01
+          cp -R deploy/. environments/Cluster01/
+
+###############################################################
+# Cluster02
+###############################################################
 
   deploy_cluster02:
     name: Deploy Cluster02
@@ -71,18 +109,29 @@ jobs:
     runs-on: ubuntu-latest
 
     environment:
-      name: Cluster02
+      name: Production
 
     steps:
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: Admin_Sprint${{ needs.read_config.outputs.sprint }}_Patch${{ needs.read_config.outputs.patch }}
-          path: deploy
+      - uses: actions/checkout@v4
 
-      - run: mkdir -p environments/Cluster02
+      - name: Get Latest Admin Artifact
+        shell: bash
+        run: |
+          mkdir -p deploy
 
-      - run: cp -R deploy/. environments/Cluster02/
+          LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
+
+          cp "$LATEST" deploy/
+
+      - name: Deploy Cluster02
+        run: |
+          mkdir -p environments/Cluster02
+          cp -R deploy/. environments/Cluster02/
+
+###############################################################
+# Cluster03
+###############################################################
 
   deploy_cluster03:
     name: Deploy Cluster03
@@ -90,15 +139,22 @@ jobs:
     runs-on: ubuntu-latest
 
     environment:
-      name: Cluster03
+      name: Production
 
     steps:
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: Admin_Sprint${{ needs.read_config.outputs.sprint }}_Patch${{ needs.read_config.outputs.patch }}
-          path: deploy
+      - uses: actions/checkout@v4
 
-      - run: mkdir -p environments/Cluster03
+      - name: Get Latest Admin Artifact
+        shell: bash
+        run: |
+          mkdir -p deploy
 
-      - run: cp -R deploy/. environments/Cluster03/
+          LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
+
+          cp "$LATEST" deploy/
+
+      - name: Deploy Cluster03
+        run: |
+          mkdir -p environments/Cluster03
+          cp -R deploy/. environments/Cluster03/
