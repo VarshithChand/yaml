@@ -2,6 +2,30 @@ name: Release Admin API
 
 on:
   workflow_dispatch:
+    inputs:
+      deploy_rc:
+        description: "Deploy to RC"
+        type: boolean
+        required: true
+        default: true
+
+      deploy_cluster01:
+        description: "Deploy Cluster01"
+        type: boolean
+        required: true
+        default: true
+
+      deploy_cluster02:
+        description: "Deploy Cluster02"
+        type: boolean
+        required: true
+        default: true
+
+      deploy_cluster03:
+        description: "Deploy Cluster03"
+        type: boolean
+        required: true
+        default: true
 
 permissions:
   contents: read
@@ -13,7 +37,7 @@ concurrency:
 jobs:
 
 ###############################################################
-# Read Patch Configuration
+# Read Configuration
 ###############################################################
 
   read_config:
@@ -35,22 +59,26 @@ jobs:
         shell: bash
         run: |
 
-          echo "Branch  : $GITHUB_REF_NAME"
+          echo "Branch : $GITHUB_REF_NAME"
 
           echo "sprint=$(grep '^SPRINT=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
           echo "patch=$(grep '^PATCH=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
 
       - name: Display Configuration
+
         run: |
+
           echo "Branch : $GITHUB_REF_NAME"
           echo "Sprint : ${{ steps.config.outputs.sprint }}"
           echo "Patch  : ${{ steps.config.outputs.patch }}"
 
 ###############################################################
-# RC Deployment
+# Deploy RC
 ###############################################################
 
   deploy_rc:
+
+    if: ${{ inputs.deploy_rc }}
 
     name: Deploy RC
 
@@ -75,7 +103,7 @@ jobs:
 
           LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
 
-          echo "Latest Artifact : $LATEST"
+          echo "Artifact : $LATEST"
 
           cp "$LATEST" deploy/
 
@@ -92,14 +120,16 @@ jobs:
           cp -R deploy/. environments/RC/
 
 ###############################################################
-# Cluster01
+# Deploy Cluster01
 ###############################################################
 
   deploy_cluster01:
 
+    if: ${{ inputs.deploy_cluster01 }}
+
     name: Deploy Cluster01
 
-    needs: deploy_rc
+    needs: read_config
 
     runs-on: ubuntu-latest
 
@@ -112,15 +142,13 @@ jobs:
 
       - name: Get Latest Artifact
 
-        shell: bash
-
         run: |
 
           mkdir -p deploy
 
           LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
 
-          echo "Deploying : $LATEST"
+          echo "Artifact : $LATEST"
 
           cp "$LATEST" deploy/
 
@@ -133,14 +161,16 @@ jobs:
           cp -R deploy/. environments/Cluster01/
 
 ###############################################################
-# Cluster02
+# Deploy Cluster02
 ###############################################################
 
   deploy_cluster02:
 
+    if: ${{ inputs.deploy_cluster02 }}
+
     name: Deploy Cluster02
 
-    needs: deploy_cluster01
+    needs: read_config
 
     runs-on: ubuntu-latest
 
@@ -153,13 +183,13 @@ jobs:
 
       - name: Get Latest Artifact
 
-        shell: bash
-
         run: |
 
           mkdir -p deploy
 
           LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
+
+          echo "Artifact : $LATEST"
 
           cp "$LATEST" deploy/
 
@@ -172,14 +202,16 @@ jobs:
           cp -R deploy/. environments/Cluster02/
 
 ###############################################################
-# Cluster03
+# Deploy Cluster03
 ###############################################################
 
   deploy_cluster03:
 
+    if: ${{ inputs.deploy_cluster03 }}
+
     name: Deploy Cluster03
 
-    needs: deploy_cluster02
+    needs: read_config
 
     runs-on: ubuntu-latest
 
@@ -192,13 +224,13 @@ jobs:
 
       - name: Get Latest Artifact
 
-        shell: bash
-
         run: |
 
           mkdir -p deploy
 
           LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
+
+          echo "Artifact : $LATEST"
 
           cp "$LATEST" deploy/
 
@@ -219,7 +251,13 @@ jobs:
     name: Release Completed
 
     needs:
+      - read_config
+      - deploy_rc
+      - deploy_cluster01
+      - deploy_cluster02
       - deploy_cluster03
+
+    if: always()
 
     runs-on: ubuntu-latest
 
@@ -230,11 +268,14 @@ jobs:
         run: |
 
           echo "========================================="
-          echo "Admin API Release Completed Successfully"
+          echo "Admin API Release Summary"
           echo "========================================="
-          echo "Branch     : $GITHUB_REF_NAME"
-          echo "RC         : SUCCESS"
-          echo "Cluster01  : SUCCESS"
-          echo "Cluster02  : SUCCESS"
-          echo "Cluster03  : SUCCESS"
+          echo "Branch : $GITHUB_REF_NAME"
+          echo "Sprint : ${{ needs.read_config.outputs.sprint }}"
+          echo "Patch  : ${{ needs.read_config.outputs.patch }}"
+          echo ""
+          echo "Deploy RC         : ${{ inputs.deploy_rc }}"
+          echo "Deploy Cluster01  : ${{ inputs.deploy_cluster01 }}"
+          echo "Deploy Cluster02  : ${{ inputs.deploy_cluster02 }}"
+          echo "Deploy Cluster03  : ${{ inputs.deploy_cluster03 }}"
           echo "========================================="
