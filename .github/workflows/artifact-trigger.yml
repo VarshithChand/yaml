@@ -1,0 +1,30 @@
+name: Artifact Folder Trigger
+
+on:
+  push:
+    branches:
+      - S_21_P3
+    paths:
+      - 'artifacts/**'
+
+  workflow_dispatch:
+
+jobs:
+  artifact-trigger:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Print Trigger Details
+        run: |
+          echo "Workflow Triggered!"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Actor: ${{ github.actor }}"
+          echo "Commit: ${{ github.sha }}"
+
+      - name: List Artifact Files
+        run: |
+          echo "Artifacts:"
+          ls -R artifacts
