@@ -1,59 +1,57 @@
-name: Release Admin API
+name: Release All APIs
 
 on:
   push:
     branches:
-      - S_21_P2
+      - patch-cicd-demo
     paths:
       - "artifacts/AdminAPI/New/**"
+      - "artifacts/PMSCoreAPI/New/**"
+      - "artifacts/SecurityAPI/New/**"
 
   workflow_dispatch:
     inputs:
 
-      artifact:
-
-        description: "Select Artifact Version"
-
+      service:
+        description: "Select Service"
         required: true
-
-        default: New
-
+        default: Admin
         type: choice
+        options:
+          - Admin
+          - PMSCore
+          - Security
 
+      artifact:
+        description: "Select Artifact Version"
+        required: true
+        default: New
+        type: choice
         options:
           - New
           - Old1
           - Old2
 
       cluster01:
-
         description: "Deploy Cluster01"
-
         type: boolean
-
         default: true
 
       cluster02:
-
         description: "Deploy Cluster02"
-
         type: boolean
-
         default: true
 
       cluster03:
-
         description: "Deploy Cluster03"
-
         type: boolean
-
         default: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-admin-${{ github.ref }}
+  group: release-all-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -61,127 +59,109 @@ jobs:
 ###############################################################
 # Read Configuration
 ###############################################################
-
   read_config:
-
     name: Read Patch Configuration
-
     runs-on: ubuntu-latest
 
     outputs:
-
       sprint: ${{ steps.config.outputs.sprint }}
-
       patch: ${{ steps.config.outputs.patch }}
-
+      service: ${{ steps.service.outputs.service }}
+      dir: ${{ steps.service.outputs.dir }}
       artifact: ${{ steps.artifact.outputs.artifact }}
 
     steps:
-
       - name: Checkout Repository
-
         uses: actions/checkout@v4
-
         with:
           fetch-depth: 0
 
-###############################################################
-# Read patch.config
-###############################################################
-
       - id: config
-
         shell: bash
-
         run: |
-
           echo "Branch : $GITHUB_REF_NAME"
-
           echo "sprint=$(grep '^SPRINT=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
-
           echo "patch=$(grep '^PATCH=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+
+###############################################################
+# Decide which service triggered this run
+###############################################################
+      - id: service
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+
+            CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} \
+              | grep -E '^artifacts/(AdminAPI|PMSCoreAPI|SecurityAPI)/New/' | head -1)
+
+            case "$CHANGED" in
+              artifacts/AdminAPI/New/*)     SERVICE="Admin";    DIR="AdminAPI" ;;
+              artifacts/PMSCoreAPI/New/*)   SERVICE="PMSCore";  DIR="PMSCoreAPI" ;;
+              artifacts/SecurityAPI/New/*)  SERVICE="Security"; DIR="SecurityAPI" ;;
+              *)
+                echo "Could not determine which service changed."
+                exit 1
+                ;;
+            esac
+
+          else
+            SERVICE="${{ inputs.service }}"
+            case "$SERVICE" in
+              Admin)    DIR="AdminAPI" ;;
+              PMSCore)  DIR="PMSCoreAPI" ;;
+              Security) DIR="SecurityAPI" ;;
+            esac
+          fi
+
+          echo "service=$SERVICE" >> $GITHUB_OUTPUT
+          echo "dir=$DIR" >> $GITHUB_OUTPUT
 
 ###############################################################
 # Decide which artifact to use
 ###############################################################
-
       - id: artifact
-
         shell: bash
-
         run: |
+          DIR="${{ steps.service.outputs.dir }}"
 
           if [ "${{ github.event_name }}" = "push" ]; then
-
-              ARTIFACT="artifacts/AdminAPI/New"
-
+              ARTIFACT="artifacts/${DIR}/New"
           else
-
-              ARTIFACT="artifacts/AdminAPI/${{ inputs.artifact }}"
-
+              ARTIFACT="artifacts/${DIR}/${{ inputs.artifact }}"
           fi
 
           FILE=$(ls -t ${ARTIFACT}/*.zip | head -1)
 
           if [ -z "$FILE" ]; then
-
-              echo "No artifact found."
-
+              echo "No artifact found in ${ARTIFACT}."
               exit 1
-
           fi
 
           echo "artifact=$FILE" >> $GITHUB_OUTPUT
 
-###############################################################
-# Display Information
-###############################################################
-
       - name: Display Information
-
         run: |
-
           echo "======================================"
-
           echo "Branch  : $GITHUB_REF_NAME"
-
+          echo "Service : ${{ steps.service.outputs.service }}"
           echo "Sprint  : ${{ steps.config.outputs.sprint }}"
-
           echo "Patch   : ${{ steps.config.outputs.patch }}"
-
           echo "Artifact: ${{ steps.artifact.outputs.artifact }}"
-
           echo "======================================"
-
-###############################################################
-# Upload selected artifact
-###############################################################
 
       - name: Upload Selected Artifact
-
         uses: actions/upload-artifact@v4
-
         with:
-
           name: ReleaseArtifact
-
           path: ${{ steps.artifact.outputs.artifact }}
-
-
-
 
 ###############################################################
 # RC Deployment
 ###############################################################
-
   deploy_rc:
-
     name: Deploy to RC
-
     needs: read_config
-
     runs-on: ubuntu-latest
-
     environment:
       name: RC
 
@@ -189,175 +169,89 @@ jobs:
       deploy_path: ${{ steps.deploy.outputs.path }}
 
     steps:
-
-###############################################################
-# Checkout Repository
-###############################################################
-
       - name: Checkout Repository
-
         uses: actions/checkout@v4
 
-###############################################################
-# Download Selected Artifact
-###############################################################
-
       - name: Download Artifact
-
         uses: actions/download-artifact@v4
-
         with:
           name: ReleaseArtifact
           path: release
 
-###############################################################
-# Verify Artifact
-###############################################################
-
       - name: Verify Artifact
-
         shell: bash
-
         run: |
-
           echo "Selected Artifact"
-
           ls -R release
 
-###############################################################
-# Extract Artifact
-###############################################################
-
       - name: Extract Artifact
-
         shell: bash
-
         run: |
-
           mkdir deploy
-
           unzip release/*.zip -d deploy
 
-###############################################################
-# Verify Extracted Files
-###############################################################
-
       - name: Verify Deploy Folder
-
         shell: bash
-
         run: |
-
           echo "Deploy Folder"
-
           ls -R deploy
 
-###############################################################
-# Simulate RC Deployment
-###############################################################
-
       - id: deploy
-
         shell: bash
-
         run: |
-
-          mkdir -p environments/RC
-
-          rm -rf environments/RC/*
-
-          cp -R deploy/. environments/RC/
-
-          echo "path=environments/RC" >> $GITHUB_OUTPUT
-
-###############################################################
-# Validate Deployment
-###############################################################
+          DIR="${{ needs.read_config.outputs.dir }}"
+          mkdir -p "environments/RC/${DIR}"
+          rm -rf "environments/RC/${DIR:?}"/*
+          cp -R deploy/. "environments/RC/${DIR}/"
+          echo "path=environments/RC/${DIR}" >> $GITHUB_OUTPUT
 
       - name: Validate Deployment
-
         shell: bash
-
         run: |
-
           echo "Deployment completed."
-
-          ls -R environments/RC
-
-###############################################################
-# Deployment Information
-###############################################################
+          ls -R "environments/RC/${{ needs.read_config.outputs.dir }}"
 
       - name: Deployment Details
-
         shell: bash
-
         run: |
-
           echo "========================================"
-
           echo "Branch"
-
           echo "$GITHUB_REF_NAME"
-
           echo ""
-
+          echo "Service"
+          echo "${{ needs.read_config.outputs.service }}"
+          echo ""
           echo "Sprint"
-
           echo "${{ needs.read_config.outputs.sprint }}"
-
           echo ""
-
           echo "Patch"
-
           echo "${{ needs.read_config.outputs.patch }}"
-
           echo ""
-
           echo "Artifact"
-
           echo "${{ needs.read_config.outputs.artifact }}"
-
           echo ""
-
           echo "RC Deployment Successful"
-
           echo "========================================"
-
-###############################################################
-# Upload RC Deployment Logs
-###############################################################
 
       - name: Upload RC Deployment
-
         uses: actions/upload-artifact@v4
-
         with:
-
           name: RCDeployment
-
           path: environments/RC
-
 
 ###############################################################
 # Production Deployment
 ###############################################################
-
   deploy_production:
-
     name: Deploy to Production
-
     needs:
       - read_config
       - deploy_rc
-
     runs-on: ubuntu-latest
-
     environment:
       name: Production
 
     steps:
-
       - name: Checkout Repository
         uses: actions/checkout@v4
 
@@ -373,108 +267,55 @@ jobs:
           mkdir deploy
           unzip release/*.zip -d deploy
 
-###############################################################
-# Cluster01
-###############################################################
-
       - name: Deploy Cluster01
-
         if: ${{ github.event_name == 'push' || inputs.cluster01 }}
-
         shell: bash
-
         run: |
-
-          echo "Deploying to Cluster01..."
-
-          mkdir -p environments/Cluster01
-
-          rm -rf environments/Cluster01/*
-
-          cp -R deploy/. environments/Cluster01/
-
+          DIR="${{ needs.read_config.outputs.dir }}"
+          echo "Deploying ${{ needs.read_config.outputs.service }} to Cluster01..."
+          mkdir -p "environments/Cluster01/${DIR}"
+          rm -rf "environments/Cluster01/${DIR:?}"/*
+          cp -R deploy/. "environments/Cluster01/${DIR}/"
           echo "Cluster01 Deployment Completed"
 
-###############################################################
-# Cluster02
-###############################################################
-
       - name: Deploy Cluster02
-
         if: ${{ github.event_name == 'push' || inputs.cluster02 }}
-
         shell: bash
-
         run: |
-
-          echo "Deploying to Cluster02..."
-
-          mkdir -p environments/Cluster02
-
-          rm -rf environments/Cluster02/*
-
-          cp -R deploy/. environments/Cluster02/
-
+          DIR="${{ needs.read_config.outputs.dir }}"
+          echo "Deploying ${{ needs.read_config.outputs.service }} to Cluster02..."
+          mkdir -p "environments/Cluster02/${DIR}"
+          rm -rf "environments/Cluster02/${DIR:?}"/*
+          cp -R deploy/. "environments/Cluster02/${DIR}/"
           echo "Cluster02 Deployment Completed"
 
-###############################################################
-# Cluster03
-###############################################################
-
       - name: Deploy Cluster03
-
         if: ${{ github.event_name == 'push' || inputs.cluster03 }}
-
         shell: bash
-
         run: |
-
-          echo "Deploying to Cluster03..."
-
-          mkdir -p environments/Cluster03
-
-          rm -rf environments/Cluster03/*
-
-          cp -R deploy/. environments/Cluster03/
-
+          DIR="${{ needs.read_config.outputs.dir }}"
+          echo "Deploying ${{ needs.read_config.outputs.service }} to Cluster03..."
+          mkdir -p "environments/Cluster03/${DIR}"
+          rm -rf "environments/Cluster03/${DIR:?}"/*
+          cp -R deploy/. "environments/Cluster03/${DIR}/"
           echo "Cluster03 Deployment Completed"
 
-###############################################################
-# Verify Production
-###############################################################
-
       - name: Verify Production
-
         shell: bash
-
         run: |
-
+          DIR="${{ needs.read_config.outputs.dir }}"
           echo "=============================="
-
           echo "Cluster01"
-
-          ls -R environments/Cluster01 || true
-
+          ls -R "environments/Cluster01/${DIR}" || true
           echo ""
-
           echo "Cluster02"
-
-          ls -R environments/Cluster02 || true
-
+          ls -R "environments/Cluster02/${DIR}" || true
           echo ""
-
           echo "Cluster03"
-
-          ls -R environments/Cluster03 || true
-
-###############################################################
-# Upload Deployment
-###############################################################
+          ls -R "environments/Cluster03/${DIR}" || true
 
       - name: Upload Production Deployment
-
         uses: actions/upload-artifact@v4
-
         with:
           name: ProductionDeployment
           path: environments/
@@ -482,84 +323,46 @@ jobs:
 ###############################################################
 # Release Summary
 ###############################################################
-
   release_summary:
-
     name: Release Summary
-
     needs:
       - read_config
       - deploy_rc
       - deploy_production
-
     if: always()
-
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Summary
-
         shell: bash
-
         run: |
-
           echo "========================================"
-
-          echo "Admin API Release Completed"
-
+          echo "${{ needs.read_config.outputs.service }} API Release Completed"
           echo "========================================"
-
           echo "Branch"
-
           echo "$GITHUB_REF_NAME"
-
           echo ""
-
+          echo "Service"
+          echo "${{ needs.read_config.outputs.service }}"
+          echo ""
           echo "Sprint"
-
           echo "${{ needs.read_config.outputs.sprint }}"
-
           echo ""
-
           echo "Patch"
-
           echo "${{ needs.read_config.outputs.patch }}"
-
           echo ""
-
           echo "Artifact"
-
           echo "${{ needs.read_config.outputs.artifact }}"
-
           echo ""
-
-          echo "Deploy RC"
-
-          echo "${{ github.event_name == 'push' || inputs.deploy_rc }}"
-
-          echo ""
-
           echo "Deploy Cluster01"
-
           echo "${{ github.event_name == 'push' || inputs.cluster01 }}"
-
           echo ""
-
           echo "Deploy Cluster02"
-
           echo "${{ github.event_name == 'push' || inputs.cluster02 }}"
-
           echo ""
-
           echo "Deploy Cluster03"
-
           echo "${{ github.event_name == 'push' || inputs.cluster03 }}"
-
           echo ""
-
           echo "========================================"
-
           echo "Release Successful"
-
           echo "========================================"
