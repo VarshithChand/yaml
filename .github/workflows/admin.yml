@@ -5,7 +5,7 @@ on:
 
   push:
     branches:
-      - S_21_P2
+      - S_21_P3
     paths:
       - 'src/AdminAPI/**'
       - 'config/patch.config'
