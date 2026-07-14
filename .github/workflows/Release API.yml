@@ -188,7 +188,11 @@ jobs:
           check() {
             # $1 = artifact folder, $2 = chosen version
             FOLDER="artifacts/$1/$2"
-            FILE=$(ls -t ${FOLDER}/*.zip 2>/dev/null | head -1)
+
+            # '|| true' is required: GitHub runs steps with 'bash -e -o pipefail',
+            # so a non-matching glob makes ls exit 2 and kills the whole step
+            # before the [ -z ] check below can report MISSING.
+            FILE=$(ls -t ${FOLDER}/*.zip 2>/dev/null | head -1) || true
 
             if [ -z "$FILE" ]; then
               echo "MISSING: no artifact in ${FOLDER}"
@@ -257,7 +261,16 @@ jobs:
           FOLDER="artifacts/${{ matrix.dir }}/${{ matrix.version }}"
 
           mkdir -p deploy
-          LATEST=$(ls -t ${FOLDER}/*.zip | head -1)
+
+          # '|| true' + explicit check: with 'bash -e -o pipefail' a non-matching
+          # glob would abort the step with a bare "exit code 2" instead of a
+          # readable error.
+          LATEST=$(ls -t ${FOLDER}/*.zip 2>/dev/null | head -1) || true
+
+          if [ -z "$LATEST" ]; then
+            echo "No artifact found in ${FOLDER}."
+            exit 1
+          fi
 
           echo "Service  : ${{ matrix.name }}"
           echo "Version  : ${{ matrix.version }}"
@@ -309,7 +322,16 @@ jobs:
           FOLDER="artifacts/${{ matrix.dir }}/${{ matrix.version }}"
 
           mkdir -p deploy
-          LATEST=$(ls -t ${FOLDER}/*.zip | head -1)
+
+          # '|| true' + explicit check: with 'bash -e -o pipefail' a non-matching
+          # glob would abort the step with a bare "exit code 2" instead of a
+          # readable error.
+          LATEST=$(ls -t ${FOLDER}/*.zip 2>/dev/null | head -1) || true
+
+          if [ -z "$LATEST" ]; then
+            echo "No artifact found in ${FOLDER}."
+            exit 1
+          fi
 
           echo "Artifact : $LATEST"
           cp "$LATEST" deploy/
@@ -355,7 +377,16 @@ jobs:
           FOLDER="artifacts/${{ matrix.dir }}/${{ matrix.version }}"
 
           mkdir -p deploy
-          LATEST=$(ls -t ${FOLDER}/*.zip | head -1)
+
+          # '|| true' + explicit check: with 'bash -e -o pipefail' a non-matching
+          # glob would abort the step with a bare "exit code 2" instead of a
+          # readable error.
+          LATEST=$(ls -t ${FOLDER}/*.zip 2>/dev/null | head -1) || true
+
+          if [ -z "$LATEST" ]; then
+            echo "No artifact found in ${FOLDER}."
+            exit 1
+          fi
 
           echo "Artifact : $LATEST"
           cp "$LATEST" deploy/
@@ -401,7 +432,16 @@ jobs:
           FOLDER="artifacts/${{ matrix.dir }}/${{ matrix.version }}"
 
           mkdir -p deploy
-          LATEST=$(ls -t ${FOLDER}/*.zip | head -1)
+
+          # '|| true' + explicit check: with 'bash -e -o pipefail' a non-matching
+          # glob would abort the step with a bare "exit code 2" instead of a
+          # readable error.
+          LATEST=$(ls -t ${FOLDER}/*.zip 2>/dev/null | head -1) || true
+
+          if [ -z "$LATEST" ]; then
+            echo "No artifact found in ${FOLDER}."
+            exit 1
+          fi
 
           echo "Artifact : $LATEST"
           cp "$LATEST" deploy/
