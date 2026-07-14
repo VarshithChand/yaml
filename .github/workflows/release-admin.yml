@@ -6,10 +6,41 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: admin-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+
+###############################################################
+# Validate Branch
+###############################################################
+
+  validate_branch:
+    name: Validate Branch
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Allow only master branch
+        run: |
+          echo "Current Branch : $GITHUB_REF_NAME"
+
+          if [ "$GITHUB_REF_NAME" != "master" ]; then
+            echo "======================================"
+            echo "Release can only be executed from master"
+            echo "======================================"
+            exit 1
+          fi
+
+###############################################################
+# Read Patch Configuration
+###############################################################
 
   read_config:
     name: Read Patch Configuration
+
+    needs: validate_branch
+
     runs-on: ubuntu-latest
 
     outputs:
@@ -17,16 +48,17 @@ jobs:
       patch: ${{ steps.config.outputs.patch }}
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
 
       - id: config
         shell: bash
         run: |
+
           echo "sprint=$(grep '^SPRINT=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
           echo "patch=$(grep '^PATCH=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
 
-      - name: Display Patch Information
+      - name: Display Configuration
         run: |
           echo "Sprint : ${{ steps.config.outputs.sprint }}"
           echo "Patch  : ${{ steps.config.outputs.patch }}"
@@ -36,8 +68,11 @@ jobs:
 ###############################################################
 
   deploy_rc:
-    name: Deploy to RC
+
+    name: Deploy RC
+
     needs: read_config
+
     runs-on: ubuntu-latest
 
     environment:
@@ -45,37 +80,42 @@ jobs:
 
     steps:
 
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Get Latest Admin Artifact
+      - name: Get Latest Artifact
         shell: bash
         run: |
-          mkdir -p deploy
+
+          mkdir deploy
 
           LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
 
-          echo "Latest Artifact:"
-          echo "$LATEST"
+          echo "Latest Artifact : $LATEST"
 
           cp "$LATEST" deploy/
 
-      - name: Verify Deployment Package
-        run: |
-          ls -R deploy
+      - name: Verify Package
 
-      - name: Deploy to RC
+        run: ls -R deploy
+
+      - name: Deploy RC
+
         run: |
+
           mkdir -p environments/RC
+
           cp -R deploy/. environments/RC/
 
 ###############################################################
-# Cluster01 (Approval Required)
+# Cluster01
 ###############################################################
 
   deploy_cluster01:
+
     name: Deploy Cluster01
+
     needs: deploy_rc
+
     runs-on: ubuntu-latest
 
     environment:
@@ -85,18 +125,22 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - name: Get Latest Admin Artifact
-        shell: bash
+      - name: Get Latest Artifact
+
         run: |
-          mkdir -p deploy
+
+          mkdir deploy
 
           LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
 
           cp "$LATEST" deploy/
 
       - name: Deploy Cluster01
+
         run: |
+
           mkdir -p environments/Cluster01
+
           cp -R deploy/. environments/Cluster01/
 
 ###############################################################
@@ -104,8 +148,11 @@ jobs:
 ###############################################################
 
   deploy_cluster02:
+
     name: Deploy Cluster02
+
     needs: deploy_cluster01
+
     runs-on: ubuntu-latest
 
     environment:
@@ -115,18 +162,22 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - name: Get Latest Admin Artifact
-        shell: bash
+      - name: Get Latest Artifact
+
         run: |
-          mkdir -p deploy
+
+          mkdir deploy
 
           LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
 
           cp "$LATEST" deploy/
 
       - name: Deploy Cluster02
+
         run: |
+
           mkdir -p environments/Cluster02
+
           cp -R deploy/. environments/Cluster02/
 
 ###############################################################
@@ -134,8 +185,11 @@ jobs:
 ###############################################################
 
   deploy_cluster03:
+
     name: Deploy Cluster03
+
     needs: deploy_cluster02
+
     runs-on: ubuntu-latest
 
     environment:
@@ -145,16 +199,48 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - name: Get Latest Admin Artifact
-        shell: bash
+      - name: Get Latest Artifact
+
         run: |
-          mkdir -p deploy
+
+          mkdir deploy
 
           LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
 
           cp "$LATEST" deploy/
 
       - name: Deploy Cluster03
+
         run: |
+
           mkdir -p environments/Cluster03
+
           cp -R deploy/. environments/Cluster03/
+
+###############################################################
+# Release Summary
+###############################################################
+
+  release_complete:
+
+    name: Release Completed
+
+    needs:
+      - deploy_cluster03
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Summary
+
+        run: |
+
+          echo "======================================="
+          echo " Admin API Release Completed"
+          echo "======================================="
+          echo " RC         : SUCCESS"
+          echo " Cluster01  : SUCCESS"
+          echo " Cluster02  : SUCCESS"
+          echo " Cluster03  : SUCCESS"
+          echo "======================================="
