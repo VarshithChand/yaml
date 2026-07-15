@@ -18,10 +18,18 @@ name: Build & Release
 #   [ Stage ]             <-- automatic  (unzip + validate; PRINTS artifact name)
 #            |
 #            v
-#   [ Deploy RC ]         <-- WAITS FOR APPROVAL
+#   [ Deploy RC ]         <-- WAITS FOR APPROVAL  (guarded: aborts if superseded)
 #            |
 #            v
-#   [ Cluster01 ] [ Cluster02 ] [ Cluster03 ]   <-- each WAITS FOR APPROVAL
+#   [ Cluster01 ] [ Cluster02 ] [ Cluster03 ]   <-- each WAITS FOR APPROVAL (guarded)
+#
+# SUPERSEDE GUARD
+# If a newer build finishes while an older run is paused at an
+# approval gate, the newer run's rotation moves the older run's zip
+# from New/ down to Old1/. Without a guard, the older run would still
+# deploy its (now demoted) zip when approved. Each approval-gated job
+# re-checks that this run's artifact is STILL in artifacts/<dir>/New/;
+# if it isn't, the run aborts so only the current New artifact deploys.
 #
 # Approval is enforced by GitHub Environments (Settings > Environments):
 #   Staging   -> no required reviewers  (auto)
@@ -29,10 +37,7 @@ name: Build & Release
 #   Cluster01/02/03 -> required reviewers (approval)
 #
 # NOTE on branches: Admin lives on S_21_P3, PMSCore/Security on
-# S_21_P2, so both branches are watched below. On push we detect the
-# service from which src/<Service>/ folder changed. A push that
-# changes ONLY config/patch.config can't be mapped to one service --
-# use the manual "Run workflow" button and pick the service instead.
+# S_21_P2, so both branches are watched below.
 ###############################################################
 
 on:
@@ -404,7 +409,7 @@ jobs:
           if-no-files-found: error
 
 ###############################################################
-# 5. Deploy RC  (WAITS FOR APPROVAL)
+# 5. Deploy RC  (WAITS FOR APPROVAL) -- guarded against supersede
 ###############################################################
   deploy_rc:
     name: Deploy RC - ${{ needs.stage.outputs.service }}
@@ -416,11 +421,30 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      # Runs AFTER approval. If a newer build rotated this run's zip out
+      # of New/ (down to Old1/) while we were waiting, stop here.
+      - name: Ensure Artifact Is Still The Latest
+        shell: bash
+        run: |
+          ARTIFACT="${{ needs.stage.outputs.artifact }}"
+          DIR="${{ needs.stage.outputs.dir }}"
+          if [ -f "artifacts/$DIR/New/$ARTIFACT" ]; then
+            echo "OK: $ARTIFACT is still the current New artifact. Proceeding."
+          else
+            echo "SUPERSEDED: $ARTIFACT is no longer in artifacts/$DIR/New/"
+            echo "A newer build replaced it (rotated to Old1). Aborting this stale deploy."
+            exit 1
+          fi
+
       - name: Download Staged Package
         uses: actions/download-artifact@v4
         with:
           name: StagedPackage
           path: staging
+
       - name: Deploy RC
         run: |
           echo "Deploying artifact: ${{ needs.stage.outputs.artifact }}"
@@ -431,7 +455,7 @@ jobs:
           ls -R "environments/RC/${{ needs.stage.outputs.dir }}"
 
 ###############################################################
-# 6. Cluster01  (WAITS FOR APPROVAL)
+# 6. Cluster01  (WAITS FOR APPROVAL) -- guarded against supersede
 ###############################################################
   deploy_cluster01:
     name: Deploy Cluster01 - ${{ needs.stage.outputs.service }}
@@ -445,11 +469,27 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Ensure Artifact Is Still The Latest
+        shell: bash
+        run: |
+          ARTIFACT="${{ needs.stage.outputs.artifact }}"
+          DIR="${{ needs.stage.outputs.dir }}"
+          if [ -f "artifacts/$DIR/New/$ARTIFACT" ]; then
+            echo "OK: $ARTIFACT is still the current New artifact. Proceeding."
+          else
+            echo "SUPERSEDED: $ARTIFACT is no longer in artifacts/$DIR/New/. Aborting stale deploy."
+            exit 1
+          fi
+
       - name: Download Staged Package
         uses: actions/download-artifact@v4
         with:
           name: StagedPackage
           path: staging
+
       - name: Deploy Cluster01
         run: |
           echo "Deploying artifact: ${{ needs.stage.outputs.artifact }}"
@@ -459,7 +499,7 @@ jobs:
           echo "${{ needs.stage.outputs.service }} deployed to Cluster01"
 
 ###############################################################
-# 7. Cluster02  (WAITS FOR APPROVAL)
+# 7. Cluster02  (WAITS FOR APPROVAL) -- guarded against supersede
 ###############################################################
   deploy_cluster02:
     name: Deploy Cluster02 - ${{ needs.stage.outputs.service }}
@@ -473,11 +513,27 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Ensure Artifact Is Still The Latest
+        shell: bash
+        run: |
+          ARTIFACT="${{ needs.stage.outputs.artifact }}"
+          DIR="${{ needs.stage.outputs.dir }}"
+          if [ -f "artifacts/$DIR/New/$ARTIFACT" ]; then
+            echo "OK: $ARTIFACT is still the current New artifact. Proceeding."
+          else
+            echo "SUPERSEDED: $ARTIFACT is no longer in artifacts/$DIR/New/. Aborting stale deploy."
+            exit 1
+          fi
+
       - name: Download Staged Package
         uses: actions/download-artifact@v4
         with:
           name: StagedPackage
           path: staging
+
       - name: Deploy Cluster02
         run: |
           echo "Deploying artifact: ${{ needs.stage.outputs.artifact }}"
@@ -487,7 +543,7 @@ jobs:
           echo "${{ needs.stage.outputs.service }} deployed to Cluster02"
 
 ###############################################################
-# 8. Cluster03  (WAITS FOR APPROVAL)
+# 8. Cluster03  (WAITS FOR APPROVAL) -- guarded against supersede
 ###############################################################
   deploy_cluster03:
     name: Deploy Cluster03 - ${{ needs.stage.outputs.service }}
@@ -501,11 +557,27 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Ensure Artifact Is Still The Latest
+        shell: bash
+        run: |
+          ARTIFACT="${{ needs.stage.outputs.artifact }}"
+          DIR="${{ needs.stage.outputs.dir }}"
+          if [ -f "artifacts/$DIR/New/$ARTIFACT" ]; then
+            echo "OK: $ARTIFACT is still the current New artifact. Proceeding."
+          else
+            echo "SUPERSEDED: $ARTIFACT is no longer in artifacts/$DIR/New/. Aborting stale deploy."
+            exit 1
+          fi
+
       - name: Download Staged Package
         uses: actions/download-artifact@v4
         with:
           name: StagedPackage
           path: staging
+
       - name: Deploy Cluster03
         run: |
           echo "Deploying artifact: ${{ needs.stage.outputs.artifact }}"
