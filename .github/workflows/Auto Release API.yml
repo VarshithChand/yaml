@@ -203,6 +203,12 @@ jobs:
       - name: Rotate Existing Artifacts
         shell: bash
         run: |
+          # dotglob so a folder holding only a hidden file (e.g. .gitkeep)
+          # still matches '*' the same way `ls -A` above already treats it
+          # as non-empty; nullglob so an unmatched '*' expands to nothing
+          # instead of being passed to mv as a literal, unresolvable path.
+          shopt -s nullglob dotglob
+
           echo "Clearing Old2"
           rm -rf artifacts/AdminAPI/Old2/*
 
