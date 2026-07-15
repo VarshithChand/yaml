@@ -1,0 +1,175 @@
+name: Clean Artifacts
+
+###############################################################
+# One-off cleanup.
+#
+# Deletes every committed *.zip under artifacts/ for the chosen
+# service(s), then re-creates empty New / Old1 / Old2 folders
+# (kept in git via .gitkeep) so the build/release workflows
+# still find the paths. Commits the cleanup back to the branch.
+#
+# Requires you to TYPE "DELETE" to confirm.
+###############################################################
+
+on:
+  workflow_dispatch:
+    inputs:
+
+      target:
+        description: "Which artifacts to clean"
+        type: choice
+        required: true
+        default: All
+        options:
+          - All
+          - Admin
+          - PMSCore
+          - Security
+
+      confirm:
+        description: 'Type DELETE to confirm'
+        type: string
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: clean-artifacts-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+
+  clean:
+
+    name: Clean Artifacts
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+###############################################################
+# Safety check -- must type DELETE
+###############################################################
+
+      - name: Confirm
+        shell: bash
+        run: |
+
+          if [ "${{ inputs.confirm }}" != "DELETE" ]; then
+            {
+              echo "## Cleanup cancelled"
+              echo ""
+              echo "You must type **DELETE** in the confirm box to run this."
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            echo "Confirmation not given. Type DELETE to proceed."
+            exit 1
+          fi
+
+          echo "Confirmed."
+
+###############################################################
+# Show what exists before cleanup
+###############################################################
+
+      - name: Show Current Artifacts
+        shell: bash
+        run: |
+
+          echo "Before cleanup:"
+          ls -R artifacts 2>/dev/null || echo "No artifacts folder."
+
+###############################################################
+# Reset the selected service folders
+###############################################################
+
+      - name: Reset Artifact Folders
+        shell: bash
+        run: |
+
+          reset_service() {
+            # $1 = artifact folder name (e.g. AdminAPI)
+            BASE="artifacts/$1"
+
+            echo "Resetting $BASE ..."
+
+            rm -rf "$BASE"
+
+            mkdir -p "$BASE/New" "$BASE/Old1" "$BASE/Old2"
+
+            # .gitkeep keeps the empty folders tracked in git
+            touch "$BASE/New/.gitkeep" "$BASE/Old1/.gitkeep" "$BASE/Old2/.gitkeep"
+          }
+
+          case "${{ inputs.target }}" in
+            All)
+              reset_service "AdminAPI"
+              reset_service "PMSCoreAPI"
+              reset_service "SecurityAPI"
+              ;;
+            Admin)    reset_service "AdminAPI" ;;
+            PMSCore)  reset_service "PMSCoreAPI" ;;
+            Security) reset_service "SecurityAPI" ;;
+          esac
+
+          echo "After cleanup:"
+          ls -R artifacts
+
+###############################################################
+# Commit & push the cleanup
+###############################################################
+
+      - name: Commit Cleanup
+        shell: bash
+        run: |
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A artifacts
+
+          if git diff --cached --quiet; then
+            echo "Nothing to clean -- already empty."
+            exit 0
+          fi
+
+          git commit -m "Clean artifacts (${{ inputs.target }})"
+
+          for i in 1 2 3; do
+            if git push origin ${GITHUB_REF_NAME}; then
+              echo "Push Successful"
+              exit 0
+            fi
+            echo "Push failed, retrying ($i)..."
+            git fetch origin ${GITHUB_REF_NAME}
+            git reset --hard origin/${GITHUB_REF_NAME}
+            # Re-apply the cleanup after syncing, then loop to push again
+            exit 1
+          done
+
+          echo "Push failed."
+          exit 1
+
+###############################################################
+# Summary
+###############################################################
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+
+          {
+            echo "## Artifacts cleaned"
+            echo ""
+            echo "Target : ${{ inputs.target }}"
+            echo ""
+            echo "New / Old1 / Old2 folders are now empty and ready for fresh builds."
+          } >> "$GITHUB_STEP_SUMMARY"
