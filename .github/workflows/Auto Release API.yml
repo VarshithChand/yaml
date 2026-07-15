@@ -1,71 +1,296 @@
-name: Auto Release API
+name: Admin API - Build & Release
 
 ###############################################################
-# Flow
+# ONE-SHOT PIPELINE (single workflow run)
 #
-#   New artifact committed to artifacts/<Service>/New/
+#   push to src/AdminAPI/**  (or manual dispatch)
 #            |
 #            v
-#   [ Build & Stage ]        <-- automatic, NO approval
+#   [ Build ]             <-- automatic
 #            |
 #            v
-#   [ Deploy RC ]            <-- WAITS FOR APPROVAL
+#   [ Rotate & Store ]    <-- automatic  (New -> Old1 -> Old2, commit new zip)
+#            |
+#            v
+#   [ Stage ]             <-- automatic  (unzip + validate the fresh artifact)
+#            |
+#            v
+#   [ Deploy RC ]         <-- WAITS FOR APPROVAL
 #            |
 #            v
 #   [ Cluster01 ] [ Cluster02 ] [ Cluster03 ]   <-- each WAITS FOR APPROVAL
 #
+# Why merge the two old workflows into one?
+# A commit pushed with the built-in GITHUB_TOKEN does NOT start a
+# new workflow run (GitHub blocks this to avoid recursive runs).
+# So the old "CI pushes artifact -> Auto Release triggers on that
+# push" hand-off never actually fired. Doing everything in a single
+# run removes the need for a second trigger entirely.
+#
+# Approval is enforced by GitHub Environments, NOT by YAML:
+#   Settings > Environments
+#     Staging   -> no required reviewers  (auto)
+#     RC        -> add required reviewers  (approval)
+#     Cluster01 -> add required reviewers  (approval)
+#     Cluster02 -> add required reviewers  (approval)
+#     Cluster03 -> add required reviewers  (approval)
 ###############################################################
 
 on:
+  workflow_dispatch:
+
   push:
     branches:
       - S_21_P3
     paths:
-      - 'artifacts/AdminAPI/New/**'
-      - 'artifacts/PMSCoreAPI/New/**'
-      - 'artifacts/SecurityAPI/New/**'
-
-  workflow_dispatch:
-    inputs:
-      service:
-        description: "Service"
-        type: choice
-        required: true
-        default: Admin
-        options:
-          - Admin
-          - PMSCore
-          - Security
-
-      version:
-        description: "Artifact Version"
-        type: choice
-        required: true
-        default: New
-        options:
-          - New
-          - Old1
-          - Old2
+      - 'src/AdminAPI/**'
+      - 'config/patch.config'
 
 permissions:
-  contents: read
+  contents: write        # needed to commit/push the rotated artifact
 
-concurrency:
-  group: auto-release-${{ github.ref }}
-  cancel-in-progress: false
+env:
+  CONFIG_FILE: config/patch.config
 
 jobs:
 
 ###############################################################
-# STAGE 1 -- Build & Stage  (AUTOMATIC, no approval)
-#
-# Detects which service's artifact changed, pulls it, unzips it,
-# validates it, and parks it in Staging ready to go.
+# 1. Read patch.config
 ###############################################################
+  read_config:
+    name: Read Patch Configuration
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
 
+    outputs:
+      sprint: ${{ steps.config.outputs.sprint }}
+      patch: ${{ steps.config.outputs.patch }}
+      version: ${{ steps.config.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: config
+        shell: bash
+        run: |
+          echo "sprint=$(grep '^SPRINT=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+          echo "patch=$(grep '^PATCH=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+          echo "version=$(grep '^VERSION=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+
+      - name: Display Configuration
+        run: |
+          echo "Sprint : ${{ steps.config.outputs.sprint }}"
+          echo "Patch  : ${{ steps.config.outputs.patch }}"
+          echo "Version: ${{ steps.config.outputs.version }}"
+
+###############################################################
+# 2. Build
+###############################################################
+  build:
+    name: Build Admin API
+    needs: read_config
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore src/AdminAPI/AdminAPI.csproj
+
+      - name: Build
+        run: dotnet build src/AdminAPI/AdminAPI.csproj --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test src/AdminAPI/AdminAPI.csproj --no-build --verbosity normal
+
+      - name: Publish
+        run: |
+          dotnet publish src/AdminAPI/AdminAPI.csproj \
+            -c Release \
+            -o publish/AdminAPI
+
+      - name: Verify Publish Output
+        run: ls -R publish/AdminAPI
+
+      - name: Upload Publish Files
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-files
+          path: publish/AdminAPI
+
+###############################################################
+# 3. Rotate & Store  (remove old, add new)
+#
+# New  -> Old1 -> Old2 rotation, then the freshly built zip is
+# written into New/ and committed/pushed to the branch.
+###############################################################
+  artifact_management:
+    name: Rotate & Store Artifacts
+    needs:
+      - read_config
+      - build
+
+    concurrency:
+      group: admin-api-artifact-${{ github.ref }}
+      cancel-in-progress: false
+
+    runs-on: ubuntu-latest
+
+    outputs:
+      artifact: ${{ steps.zip.outputs.artifact_name }}
+
+    env:
+      SPRINT: ${{ needs.read_config.outputs.sprint }}
+      PATCH: ${{ needs.read_config.outputs.patch }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Download Publish Files
+        uses: actions/download-artifact@v4
+        with:
+          name: publish-files
+          path: publish/AdminAPI
+
+      - name: Install Zip
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zip
+
+      - name: Ensure Artifact Folder Structure
+        shell: bash
+        run: |
+          mkdir -p artifacts/AdminAPI/New
+          mkdir -p artifacts/AdminAPI/Old1
+          mkdir -p artifacts/AdminAPI/Old2
+
+      - name: Configure Git
+        shell: bash
+        run: |
+          git config user.name "sam"
+          git config user.email "sam@github-actions.local"
+          git checkout ${GITHUB_REF_NAME}
+
+      - name: Sync With Remote
+        shell: bash
+        run: |
+          # Job-level concurrency guarantees one-at-a-time, so this is the
+          # latest state before we rotate/commit. No rebase after this point,
+          # so binary zip renames can never conflict.
+          git fetch origin ${GITHUB_REF_NAME}
+          git reset --hard origin/${GITHUB_REF_NAME}
+
+      - name: Capture Previous Commit Messages
+        shell: bash
+        run: |
+          NEW_MSG=$(git log -1 --format=%s -- artifacts/AdminAPI/New 2>/dev/null)
+          OLD1_MSG=$(git log -1 --format=%s -- artifacts/AdminAPI/Old1 2>/dev/null)
+          [ -z "$NEW_MSG" ] && NEW_MSG="No previous artifact"
+          [ -z "$OLD1_MSG" ] && OLD1_MSG="No previous artifact"
+          echo "NEW_MSG=$NEW_MSG" >> $GITHUB_ENV
+          echo "OLD1_MSG=$OLD1_MSG" >> $GITHUB_ENV
+
+      - name: Rotate Existing Artifacts
+        shell: bash
+        run: |
+          echo "Clearing Old2"
+          rm -rf artifacts/AdminAPI/Old2/*
+
+          echo "Moving Old1 -> Old2"
+          if [ "$(ls -A artifacts/AdminAPI/Old1 2>/dev/null)" ]; then
+            mv artifacts/AdminAPI/Old1/* artifacts/AdminAPI/Old2/
+          fi
+
+          echo "Moving New -> Old1"
+          if [ "$(ls -A artifacts/AdminAPI/New 2>/dev/null)" ]; then
+            mv artifacts/AdminAPI/New/* artifacts/AdminAPI/Old1/
+          fi
+
+      - name: Commit Old2 Rotation
+        shell: bash
+        run: |
+          git add artifacts/AdminAPI/Old2
+          if git diff --cached --quiet; then
+            echo "No Old2 changes."
+          else
+            git commit -m "Old2 <= ${OLD1_MSG}"
+          fi
+
+      - name: Commit Old1 Rotation
+        shell: bash
+        run: |
+          git add artifacts/AdminAPI/Old1
+          if git diff --cached --quiet; then
+            echo "No Old1 changes."
+          else
+            git commit -m "Old1 <= ${NEW_MSG}"
+          fi
+
+      - name: Create Latest Artifact
+        id: zip
+        shell: bash
+        run: |
+          TIMESTAMP=$(TZ=Asia/Kolkata date +"%Y%m%d_%H%M%S")
+          ARTIFACT_NAME="Admin_Sprint${SPRINT}_Patch${PATCH}_${TIMESTAMP}.zip"
+          echo "artifact_name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
+
+          zip -r \
+            artifacts/AdminAPI/New/${ARTIFACT_NAME} \
+            publish/AdminAPI
+
+      - name: Verify Artifact Structure
+        run: ls -R artifacts/AdminAPI
+
+      - name: Commit New Artifact
+        shell: bash
+        run: |
+          git add artifacts/AdminAPI/New
+          if git diff --cached --quiet; then
+            echo "No New artifact changes."
+            exit 0
+          fi
+          TIMESTAMP=$(TZ=Asia/Kolkata date +"%Y-%m-%d %H:%M:%S IST")
+          git commit -m "AdminAPI Artifact | Sprint ${SPRINT} | Patch ${PATCH} | ${TIMESTAMP}"
+
+      - name: Push Commits
+        shell: bash
+        run: |
+          for i in 1 2 3; do
+            if git push origin ${GITHUB_REF_NAME}; then
+              echo "Push Successful"
+              exit 0
+            fi
+            echo "Push rejected or failed. Fetching latest and retrying ($i)..."
+            git fetch origin ${GITHUB_REF_NAME}
+            sleep 2
+          done
+          echo "Push failed after 3 attempts."
+          exit 1
+
+      - name: Upload Latest Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AdminAPI-Latest
+          path: artifacts/AdminAPI/New/${{ steps.zip.outputs.artifact_name }}
+          retention-days: 30
+          if-no-files-found: error
+
+###############################################################
+# 4. Stage  (AUTOMATIC - Staging environment, no reviewers)
+###############################################################
   stage:
-
-    name: Build & Stage
+    name: Stage Artifact
+    needs:
+      - read_config
+      - artifact_management
 
     runs-on: ubuntu-latest
 
@@ -73,145 +298,50 @@ jobs:
       name: Staging
 
     outputs:
-      service: ${{ steps.detect.outputs.service }}
-      dir: ${{ steps.detect.outputs.dir }}
-      version: ${{ steps.detect.outputs.version }}
-      artifact: ${{ steps.pick.outputs.artifact }}
-      sprint: ${{ steps.config.outputs.sprint }}
-      patch: ${{ steps.config.outputs.patch }}
+      service: Admin
+      dir: AdminAPI
+      version: New
+      sprint: ${{ needs.read_config.outputs.sprint }}
+      patch: ${{ needs.read_config.outputs.patch }}
+      artifact: ${{ needs.artifact_management.outputs.artifact }}
 
     steps:
+      - uses: actions/checkout@v4
 
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - name: Download Latest Artifact
+        uses: actions/download-artifact@v4
         with:
-          fetch-depth: 0
-
-###############################################################
-# Read patch.config
-###############################################################
-
-      - id: config
-        shell: bash
-        run: |
-
-          echo "sprint=$(grep '^SPRINT=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
-          echo "patch=$(grep '^PATCH=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
-
-###############################################################
-# Detect which service triggered this
-#
-# push   -> whichever artifacts/<Service>/New/ folder changed
-# manual -> whatever was selected in the form
-###############################################################
-
-      - id: detect
-        shell: bash
-        run: |
-
-          if [ "${{ github.event_name }}" = "push" ]; then
-
-            CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} \
-              | grep -E '^artifacts/(AdminAPI|PMSCoreAPI|SecurityAPI)/New/' | head -1) || true
-
-            case "$CHANGED" in
-              artifacts/AdminAPI/New/*)     SERVICE="Admin";    DIR="AdminAPI" ;;
-              artifacts/PMSCoreAPI/New/*)   SERVICE="PMSCore";  DIR="PMSCoreAPI" ;;
-              artifacts/SecurityAPI/New/*)  SERVICE="Security"; DIR="SecurityAPI" ;;
-              *)
-                echo "Could not determine which service changed."
-                exit 1
-                ;;
-            esac
-
-            # A push always releases the artifact that was just created
-            VERSION="New"
-
-          else
-
-            SERVICE="${{ inputs.service }}"
-            VERSION="${{ inputs.version }}"
-
-            case "$SERVICE" in
-              Admin)    DIR="AdminAPI" ;;
-              PMSCore)  DIR="PMSCoreAPI" ;;
-              Security) DIR="SecurityAPI" ;;
-            esac
-
-          fi
-
-          echo "Service : $SERVICE"
-          echo "Version : $VERSION"
-
-          echo "service=$SERVICE" >> $GITHUB_OUTPUT
-          echo "dir=$DIR"         >> $GITHUB_OUTPUT
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-###############################################################
-# Pick the artifact
-###############################################################
-
-      - id: pick
-        shell: bash
-        run: |
-
-          FOLDER="artifacts/${{ steps.detect.outputs.dir }}/${{ steps.detect.outputs.version }}"
-
-          # '|| true' -- steps run with 'bash -e -o pipefail', so a non-matching
-          # glob would abort with a bare exit code 2 instead of the message below.
-          FILE=$(ls -t ${FOLDER}/*.zip 2>/dev/null | head -1) || true
-
-          if [ -z "$FILE" ]; then
-            echo "No artifact found in ${FOLDER}."
-            exit 1
-          fi
-
-          echo "Artifact : $FILE"
-          echo "artifact=$FILE" >> $GITHUB_OUTPUT
-
-###############################################################
-# Build / prepare the deployable package
-###############################################################
+          name: AdminAPI-Latest
+          path: incoming
 
       - name: Prepare Package
         shell: bash
         run: |
-
           mkdir -p staging
-          unzip -o "${{ steps.pick.outputs.artifact }}" -d staging
-
-          echo "Package prepared."
+          ZIP=$(ls -t incoming/*.zip | head -1)
+          echo "Unzipping $ZIP"
+          unzip -o "$ZIP" -d staging
           ls -R staging
 
       - name: Validate Package
         shell: bash
         run: |
-
           if [ -z "$(ls -A staging)" ]; then
             echo "Staging package is empty."
             exit 1
           fi
-
           echo "Package validated."
 
       - name: Staging Summary
         run: |
-
           echo "========================================="
           echo "STAGED AND READY"
-          echo "========================================="
-          echo "Service  : ${{ steps.detect.outputs.service }}"
-          echo "Version  : ${{ steps.detect.outputs.version }}"
-          echo "Sprint   : ${{ steps.config.outputs.sprint }}"
-          echo "Patch    : ${{ steps.config.outputs.patch }}"
-          echo "Artifact : ${{ steps.pick.outputs.artifact }}"
-          echo "========================================="
+          echo "Service  : Admin"
+          echo "Sprint   : ${{ needs.read_config.outputs.sprint }}"
+          echo "Patch    : ${{ needs.read_config.outputs.patch }}"
+          echo "Artifact : ${{ needs.artifact_management.outputs.artifact }}"
           echo "Waiting for RC approval..."
           echo "========================================="
-
-###############################################################
-# Hand the exact same package to every downstream job
-###############################################################
 
       - name: Upload Staged Package
         uses: actions/upload-artifact@v4
@@ -222,22 +352,17 @@ jobs:
           if-no-files-found: error
 
 ###############################################################
-# STAGE 2 -- Deploy RC  (WAITS FOR APPROVAL)
+# 5. Deploy RC  (WAITS FOR APPROVAL)
 ###############################################################
-
   deploy_rc:
-
     name: Deploy RC - ${{ needs.stage.outputs.service }}
-
     needs: stage
-
     runs-on: ubuntu-latest
 
     environment:
       name: RC
 
     steps:
-
       - uses: actions/checkout@v4
 
       - name: Download Staged Package
@@ -248,157 +373,119 @@ jobs:
 
       - name: Deploy RC
         run: |
-
           mkdir -p "environments/RC/${{ needs.stage.outputs.dir }}"
           rm -rf "environments/RC/${{ needs.stage.outputs.dir }}"/*
           cp -R staging/. "environments/RC/${{ needs.stage.outputs.dir }}/"
-
-          echo "${{ needs.stage.outputs.service }} (${{ needs.stage.outputs.version }}) deployed to RC"
+          echo "${{ needs.stage.outputs.service }} deployed to RC"
           ls -R "environments/RC/${{ needs.stage.outputs.dir }}"
 
 ###############################################################
-# STAGE 3 -- Cluster01  (WAITS FOR APPROVAL)
+# 6. Cluster01  (WAITS FOR APPROVAL)
 ###############################################################
-
   deploy_cluster01:
-
     name: Deploy Cluster01 - ${{ needs.stage.outputs.service }}
-
     needs:
       - stage
       - deploy_rc
-
     runs-on: ubuntu-latest
 
     environment:
       name: Cluster01
 
     steps:
-
       - uses: actions/checkout@v4
-
       - name: Download Staged Package
         uses: actions/download-artifact@v4
         with:
           name: StagedPackage
           path: staging
-
       - name: Deploy Cluster01
         run: |
-
           mkdir -p "environments/Cluster01/${{ needs.stage.outputs.dir }}"
           rm -rf "environments/Cluster01/${{ needs.stage.outputs.dir }}"/*
           cp -R staging/. "environments/Cluster01/${{ needs.stage.outputs.dir }}/"
-
           echo "${{ needs.stage.outputs.service }} deployed to Cluster01"
 
 ###############################################################
-# STAGE 3 -- Cluster02  (WAITS FOR APPROVAL)
+# 7. Cluster02  (WAITS FOR APPROVAL)
 ###############################################################
-
   deploy_cluster02:
-
     name: Deploy Cluster02 - ${{ needs.stage.outputs.service }}
-
     needs:
       - stage
       - deploy_rc
-
     runs-on: ubuntu-latest
 
     environment:
       name: Cluster02
 
     steps:
-
       - uses: actions/checkout@v4
-
       - name: Download Staged Package
         uses: actions/download-artifact@v4
         with:
           name: StagedPackage
           path: staging
-
       - name: Deploy Cluster02
         run: |
-
           mkdir -p "environments/Cluster02/${{ needs.stage.outputs.dir }}"
           rm -rf "environments/Cluster02/${{ needs.stage.outputs.dir }}"/*
           cp -R staging/. "environments/Cluster02/${{ needs.stage.outputs.dir }}/"
-
           echo "${{ needs.stage.outputs.service }} deployed to Cluster02"
 
 ###############################################################
-# STAGE 3 -- Cluster03  (WAITS FOR APPROVAL)
+# 8. Cluster03  (WAITS FOR APPROVAL)
 ###############################################################
-
   deploy_cluster03:
-
     name: Deploy Cluster03 - ${{ needs.stage.outputs.service }}
-
     needs:
       - stage
       - deploy_rc
-
     runs-on: ubuntu-latest
 
     environment:
       name: Cluster03
 
     steps:
-
       - uses: actions/checkout@v4
-
       - name: Download Staged Package
         uses: actions/download-artifact@v4
         with:
           name: StagedPackage
           path: staging
-
       - name: Deploy Cluster03
         run: |
-
           mkdir -p "environments/Cluster03/${{ needs.stage.outputs.dir }}"
           rm -rf "environments/Cluster03/${{ needs.stage.outputs.dir }}"/*
           cp -R staging/. "environments/Cluster03/${{ needs.stage.outputs.dir }}/"
-
           echo "${{ needs.stage.outputs.service }} deployed to Cluster03"
 
 ###############################################################
-# Summary
+# 9. Summary
 ###############################################################
-
   summary:
-
     name: Release Summary
-
     needs:
       - stage
       - deploy_rc
       - deploy_cluster01
       - deploy_cluster02
       - deploy_cluster03
-
     if: always()
-
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Summary
         run: |
-
           echo "========================================="
           echo "Release Summary"
-          echo "========================================="
           echo "Trigger   : ${{ github.event_name }}"
           echo "Service   : ${{ needs.stage.outputs.service }}"
-          echo "Version   : ${{ needs.stage.outputs.version }}"
           echo "Sprint    : ${{ needs.stage.outputs.sprint }}"
           echo "Patch     : ${{ needs.stage.outputs.patch }}"
           echo "Artifact  : ${{ needs.stage.outputs.artifact }}"
           echo ""
-          echo "Staging   : ${{ needs.stage.result }}"
+          echo "Stage     : ${{ needs.stage.result }}"
           echo "RC        : ${{ needs.deploy_rc.result }}"
           echo "Cluster01 : ${{ needs.deploy_cluster01.result }}"
           echo "Cluster02 : ${{ needs.deploy_cluster02.result }}"
