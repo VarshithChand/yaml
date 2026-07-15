@@ -1,0 +1,32 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run AdminAPI",
+      "type": "shell",
+      "command": "dotnet run --project src/AdminAPI/AdminAPI.csproj",
+      "isBackground": true
+    },
+    {
+      "label": "Run PMSCoreAPI",
+      "type": "shell",
+      "command": "dotnet run --project src/PMSCoreAPI/PMSCoreAPI.csproj",
+      "isBackground": true
+    },
+    {
+      "label": "Run SecurityAPI",
+      "type": "shell",
+      "command": "dotnet run --project src/SecurityAPI/SecurityAPI.csproj",
+      "isBackground": true
+    },
+    {
+      "label": "Run All APIs",
+      "dependsOn": [
+        "Run AdminAPI",
+        "Run PMSCoreAPI",
+        "Run SecurityAPI"
+      ],
+      "dependsOrder": "parallel"
+    }
+  ]
+}

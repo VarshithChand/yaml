@@ -1,0 +1,830 @@
+import { useEffect, useState } from "react";
+import { deploy } from "../services/deploymentService";
+import { getWorkflowInputs } from "../services/githubService";
+
+import ConfirmDialog from "./ConfirmDialog";
+import ProgressBar from "./ProgressBar";
+import SearchBox from "./common/SearchBox";
+import ComboBox from "./common/ComboBox";
+import DeploymentSummary from "./deployment/DeploymentSummary";
+import DeploymentProgress from "./deployment/DeploymentProgress";
+
+import useToast from "../hooks/useToast";
+
+function formatInputLabel(name) {
+
+    return name
+        .replace(/[_-]+/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+
+}
+
+export default function DeploymentForm({
+
+    branches,
+    artifacts,
+    workflows
+
+}) {
+
+    const [mode, setMode] = useState("CI");
+
+    const [branch, setBranch] = useState("");
+    const [workflow, setWorkflow] = useState("");
+
+    // Populated from the selected workflow's own YAML — null while loading /
+    // no workflow selected, [] once loaded if it declares no inputs at all.
+    const [workflowInputs, setWorkflowInputs] = useState(null);
+    const [workflowInputsLoading, setWorkflowInputsLoading] = useState(false);
+
+    // One value per declared input, keyed by that input's own name — this is
+    // what actually gets sent, so the keys always match what the workflow expects.
+    const [inputValues, setInputValues] = useState({});
+
+    const [selectedArtifacts, setSelectedArtifacts] = useState([]);
+
+    const [deploying, setDeploying] = useState(false);
+    const [runId, setRunId] = useState(null);
+
+    const [confirm, setConfirm] = useState(false);
+
+    /* -----------------------------
+       Search States
+    ------------------------------*/
+
+    const [artifactSearch, setArtifactSearch] = useState("");
+
+    const [workflowSearch, setWorkflowSearch] = useState("");
+
+    const toast = useToast();
+
+    // CI mode never shows deploy inputs; CD and the combined CI+CD mode both do,
+    // since a combined pipeline still declares whatever deploy inputs it needs.
+    const showInputs = mode !== "CI";
+
+    function toggleArtifact(name) {
+
+        setSelectedArtifacts((prev) =>
+
+            prev.includes(name)
+                ? prev.filter((a) => a !== name)
+                : [...prev, name]
+
+        );
+
+    }
+
+    function setInputValue(name, value) {
+
+        setInputValues((prev) => ({ ...prev, [name]: value }));
+
+    }
+
+    /* -----------------------------
+       Filtered Lists
+    ------------------------------*/
+
+    const filteredArtifacts = artifacts.filter(artifact =>
+
+        artifact.name
+            .toLowerCase()
+            .includes(artifactSearch.toLowerCase())
+
+    );
+
+    // Workflows are split into CI / CD / CI+CD by name — repos don't reliably
+    // label these consistently, so this is a heuristic: a workflow mentioning
+    // both a CI-ish and a CD-ish term (e.g. "Build & Release") is treated as a
+    // combined pipeline rather than forced into just one bucket.
+    const classifyWorkflow = (item) => {
+
+        const text = `${item.name} ${item.path || ""}`;
+
+        const hasCi = /\bci\b/i.test(text) || /\bbuild\b/i.test(text) || /\btest\b/i.test(text);
+        const hasCd = /\bcd\b/i.test(text) || /\brelease\b/i.test(text) || /\bdeploy\b/i.test(text);
+
+        if (hasCi && hasCd) {
+            return "CI+CD";
+        }
+
+        if (hasCi) {
+            return "CI";
+        }
+
+        // No clear signal either way — default to CD, since most pipelines
+        // that aren't obviously "CI" are deploy/release-oriented in practice.
+        return "CD";
+
+    };
+
+    const modeWorkflows = workflows.filter((item) => classifyWorkflow(item) === mode);
+
+    const filteredWorkflows = modeWorkflows.filter(workflow =>
+
+        workflow.name
+            .toLowerCase()
+            .includes(workflowSearch.toLowerCase())
+
+    );
+
+    function handleModeChange(nextMode) {
+
+        setMode(nextMode);
+        setWorkflow("");
+        setWorkflowSearch("");
+
+    }
+
+    /* -----------------------------
+       Fetch the selected workflow's declared inputs (CD only)
+    ------------------------------*/
+
+    useEffect(() => {
+
+        if (!showInputs || !workflow) {
+
+            setWorkflowInputs(null);
+            setInputValues({});
+            setSelectedArtifacts([]);
+
+            return;
+
+        }
+
+        let cancelled = false;
+
+        setWorkflowInputsLoading(true);
+        setWorkflowInputs(null);
+
+        getWorkflowInputs(workflow, branch)
+            .then((response) => {
+
+                if (cancelled) {
+                    return;
+                }
+
+                const inputs = Array.isArray(response.data) ? response.data : [];
+
+                setWorkflowInputs(inputs);
+                setSelectedArtifacts([]);
+
+                const seeded = {};
+
+                inputs.forEach((input) => {
+                    seeded[input.name] = input.default ?? (input.type === "boolean" ? "true" : "");
+                });
+
+                setInputValues(seeded);
+
+            })
+            .catch((err) => {
+
+                console.error(err);
+
+                if (!cancelled) {
+                    setWorkflowInputs([]);
+                    setInputValues({});
+                }
+
+            })
+            .finally(() => {
+
+                if (!cancelled) {
+                    setWorkflowInputsLoading(false);
+                }
+
+            });
+
+        return () => {
+            cancelled = true;
+        };
+
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [workflow, showInputs, branch]);
+
+    const artifactInput = (workflowInputs || []).find((i) => /artifact/i.test(i.name));
+    const dockerInput = (workflowInputs || []).find((i) => /docker|image/i.test(i.name));
+    const clusterInputs = (workflowInputs || []).filter((i) => /cluster/i.test(i.name));
+
+    const otherInputs = (workflowInputs || []).filter((i) =>
+        i !== artifactInput && i !== dockerInput && !clusterInputs.includes(i)
+    );
+
+    // Keep the recognized artifact input's value in sync with the multi-select
+    // picker, joined the same way the workflow file expects a string input.
+    useEffect(() => {
+
+        if (artifactInput) {
+            setInputValue(artifactInput.name, selectedArtifacts.join(","));
+        }
+
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedArtifacts, artifactInput?.name]);
+
+    /* -----------------------------
+       Deploy
+    ------------------------------*/
+
+    const handleDeploy = async () => {
+
+        if (!branch) {
+
+            toast.show("Please select a branch.", "error");
+            return;
+
+        }
+
+        if (!workflow) {
+
+            toast.show("Please select a workflow.", "error");
+            return;
+
+        }
+
+        if (showInputs) {
+
+            if (workflowInputsLoading || workflowInputs === null) {
+
+                toast.show("Please wait for the workflow's inputs to load.", "error");
+                return;
+
+            }
+
+            for (const input of workflowInputs) {
+
+                const value = inputValues[input.name];
+
+                if (input.required && (!value || value.trim() === "")) {
+
+                    toast.show(`Please fill in "${formatInputLabel(input.name)}".`, "error");
+                    return;
+
+                }
+
+            }
+
+        }
+
+        try {
+
+            setDeploying(true);
+            setRunId(null);
+
+            const request = {
+
+                mode,
+
+                branch,
+
+                workflow,
+
+                inputs: showInputs ? inputValues : {}
+
+            };
+
+            console.log(
+
+                "Deployment Request",
+
+                request
+
+            );
+
+            const response = await deploy(request);
+            const result = response.data;
+
+            if (result?.success) {
+
+                setRunId(result.runId || null);
+
+                toast.show(
+
+                    result.message || "Deployment Triggered Successfully",
+
+                    "success"
+
+                );
+
+            }
+            else {
+
+                toast.show(
+
+                    result?.message || "Deployment Failed",
+
+                    "error"
+
+                );
+
+            }
+
+        }
+        catch (error) {
+
+            console.error(error);
+
+            toast.show(
+
+                "Deployment Failed",
+
+                "error"
+
+            );
+
+        }
+        finally {
+
+            setDeploying(false);
+
+        }
+
+    };
+
+    /* -----------------------------
+       Dynamic Input Renderers
+    ------------------------------*/
+
+    function renderArtifactInput(input) {
+
+        return (
+
+            <div className="form-group" key={input.name}>
+
+                <label>
+                    Artifacts
+                    {" "}
+                    {selectedArtifacts.length > 0 && (
+                        <span className="badge badge-info">
+                            {selectedArtifacts.length} selected
+                        </span>
+                    )}
+                </label>
+
+                <SearchBox
+
+                    placeholder="Search Artifact..."
+
+                    value={artifactSearch}
+
+                    onChange={setArtifactSearch}
+
+                />
+
+                {
+
+                    filteredArtifacts.length === 0 ? (
+
+                        <p className="empty-state">
+                            No Artifact Found
+                        </p>
+
+                    ) : (
+
+                        <div className="checkbox-list">
+
+                            {filteredArtifacts.map((item) => (
+
+                                <label key={item.id} className="checkbox-list-item">
+
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedArtifacts.includes(item.name)}
+                                        onChange={() => toggleArtifact(item.name)}
+                                    />
+
+                                    &nbsp;{item.name}
+
+                                </label>
+
+                            ))}
+
+                        </div>
+
+                    )
+
+                }
+
+            </div>
+
+        );
+
+    }
+
+    function renderDockerInput(input) {
+
+        return (
+
+            <div className="form-group" key={input.name}>
+
+                <label>Docker Image</label>
+
+                <input
+
+                    className="form-control"
+
+                    placeholder="registry/repository:tag"
+
+                    value={inputValues[input.name] ?? ""}
+
+                    onChange={(e) => setInputValue(input.name, e.target.value)}
+
+                />
+
+            </div>
+
+        );
+
+    }
+
+    function renderClusterInput(input) {
+
+        const checked = (inputValues[input.name] ?? "") === "true";
+
+        return (
+
+            <label key={input.name} className="checkbox-list-item" style={{ display: "block" }}>
+
+                <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => setInputValue(input.name, e.target.checked ? "true" : "false")}
+                />
+
+                &nbsp;{formatInputLabel(input.name)}
+
+            </label>
+
+        );
+
+    }
+
+    function renderGenericInput(input) {
+
+        const value = inputValues[input.name] ?? "";
+
+        if (input.type === "boolean") {
+
+            return (
+
+                <div className="form-group" key={input.name}>
+
+                    <label>
+                        <input
+                            type="checkbox"
+                            checked={value === "true"}
+                            onChange={(e) => setInputValue(input.name, e.target.checked ? "true" : "false")}
+                        />
+                        &nbsp;{formatInputLabel(input.name)}
+                    </label>
+
+                </div>
+
+            );
+
+        }
+
+        if (input.options && input.options.length > 0) {
+
+            return (
+
+                <div className="form-group" key={input.name}>
+
+                    <label>{formatInputLabel(input.name)}</label>
+
+                    <select
+                        className="form-control"
+                        value={value}
+                        onChange={(e) => setInputValue(input.name, e.target.value)}
+                    >
+
+                        {input.options.map((opt) => (
+                            <option key={opt} value={opt}>{opt}</option>
+                        ))}
+
+                    </select>
+
+                </div>
+
+            );
+
+        }
+
+        return (
+
+            <div className="form-group" key={input.name}>
+
+                <label>
+                    {formatInputLabel(input.name)}
+                    {input.required && " *"}
+                </label>
+
+                <input
+                    className="form-control"
+                    placeholder={input.description || ""}
+                    value={value}
+                    onChange={(e) => setInputValue(input.name, e.target.value)}
+                />
+
+            </div>
+
+        );
+
+    }
+
+    return (
+
+        <>
+
+        <div className="deploy-panel">
+
+            <div className="card">
+
+                <h2 className="card-title">
+
+                    Deployment Configuration
+
+                </h2>
+
+                {/* ==========================
+                    CI / CD Mode
+                =========================== */}
+
+                <div className="form-group">
+
+                    <label>Mode</label>
+
+                    <div className="mode-toggle">
+
+                        <button
+                            type="button"
+                            className={`mode-toggle-option ${mode === "CI" ? "active" : ""}`}
+                            onClick={() => handleModeChange("CI")}
+                        >
+                            CI
+                        </button>
+
+                        <button
+                            type="button"
+                            className={`mode-toggle-option ${mode === "CD" ? "active" : ""}`}
+                            onClick={() => handleModeChange("CD")}
+                        >
+                            CD
+                        </button>
+
+                        <button
+                            type="button"
+                            className={`mode-toggle-option ${mode === "CI+CD" ? "active" : ""}`}
+                            onClick={() => handleModeChange("CI+CD")}
+                        >
+                            CI+CD
+                        </button>
+
+                    </div>
+
+                </div>
+
+                {/* ==========================
+                    Branch
+                =========================== */}
+
+                <div className="form-group">
+
+                    <label>Branch</label>
+
+                    <ComboBox
+
+                        options={branches.map((item) => ({ value: item.name, label: item.name }))}
+                        value={branch}
+                        onChange={setBranch}
+                        placeholder="Search or select a branch..."
+                        emptyLabel="No branch found"
+
+                    />
+
+                </div>
+
+                {/* ==========================
+                    Workflow
+                =========================== */}
+
+                <div className="form-group">
+
+                    <label>Workflow</label>
+
+                    <p className="field-hint">
+
+                        {
+
+                            mode === "CI"
+
+                                ? "Showing pipelines that look like CI (build/test) only."
+
+                                : mode === "CD"
+
+                                    ? "Showing pipelines that look like release/deploy only."
+
+                                    : "Showing pipelines that combine CI and CD (e.g. \"Build & Release\")."
+
+                        }
+
+                    </p>
+
+                    <SearchBox
+
+                        placeholder="Search Workflow..."
+
+                        value={workflowSearch}
+
+                        onChange={setWorkflowSearch}
+
+                    />
+
+                    <select
+
+                        className="form-control"
+
+                        value={workflow}
+
+                        onChange={(e) => setWorkflow(e.target.value)}
+
+                    >
+
+                        <option value="">
+
+                            Select Workflow
+
+                        </option>
+
+                        {
+
+                            filteredWorkflows.length === 0 ?
+
+                                (
+
+                                    <option disabled>
+
+                                        No {mode} Workflow Found
+
+                                    </option>
+
+                                )
+
+                                :
+
+                                (
+
+                                    filteredWorkflows.map((item) => (
+
+                                        <option
+
+                                            key={item.id}
+
+                                            value={item.path}
+
+                                        >
+
+                                            {item.name}
+
+                                        </option>
+
+                                    ))
+
+                                )
+
+                        }
+
+                    </select>
+
+                </div>
+
+                {showInputs && workflow && (
+
+                    <>
+
+                        {workflowInputsLoading && (
+
+                            <p className="field-hint">Loading workflow inputs...</p>
+
+                        )}
+
+                        {!workflowInputsLoading && workflowInputs && workflowInputs.length === 0 && (
+
+                            <p className="field-hint">This workflow doesn't declare any inputs.</p>
+
+                        )}
+
+                        {!workflowInputsLoading && artifactInput && renderArtifactInput(artifactInput)}
+
+                        {!workflowInputsLoading && dockerInput && renderDockerInput(dockerInput)}
+
+                        {!workflowInputsLoading && otherInputs.map((input) => renderGenericInput(input))}
+
+                        {!workflowInputsLoading && clusterInputs.length > 0 && (
+
+                            <div className="form-group">
+
+                                <label>Clusters</label>
+
+                                {clusterInputs.map((input) => renderClusterInput(input))}
+
+                            </div>
+
+                        )}
+
+                    </>
+
+                )}
+
+                {/* ==========================
+                    Deploy Button
+                =========================== */}
+
+                <button
+
+                    className="btn btn-success"
+
+                    disabled={deploying}
+
+                    onClick={() => setConfirm(true)}
+
+                >
+
+                    {
+
+                        deploying
+
+                            ? (showInputs ? "Deploying..." : "Running...")
+
+                            : (showInputs ? "Deploy" : "Run CI")
+
+                    }
+
+                </button>
+
+            </div>
+
+            <DeploymentSummary
+
+                mode={mode}
+
+                branch={branch}
+
+                workflow={workflow}
+
+                workflowInputs={showInputs ? workflowInputs : null}
+
+                inputValues={inputValues}
+
+            />
+
+        </div>
+
+            <ConfirmDialog
+
+                open={confirm}
+
+                title={showInputs ? "Deploy Application" : "Run CI"}
+
+                message={
+
+                    showInputs
+
+                        ? "Are you sure you want to deploy with these inputs?"
+
+                        : "Are you sure you want to run this workflow on the selected branch?"
+
+                }
+
+                onConfirm={() => {
+
+                    setConfirm(false);
+
+                    handleDeploy();
+
+                }}
+
+                onCancel={() =>
+
+                    setConfirm(false)
+
+                }
+
+            />
+
+            <ProgressBar
+
+                visible={deploying && !runId}
+
+            />
+
+            <DeploymentProgress
+
+                runId={runId}
+
+            />
+
+        </>
+
+    );
+
+}

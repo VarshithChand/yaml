@@ -1,0 +1,27 @@
+services:
+  deployment-api:
+    build:
+      context: ./src/DeploymentAPI
+      dockerfile: Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      GitHub__Owner: ${GITHUB_OWNER}
+      GitHub__Repository: ${GITHUB_REPOSITORY}
+      GitHub__PersonalAccessToken: ${GITHUB_PAT}
+    volumes:
+      # Settings saved via the Settings page (PAT, Docker creds, OAuth app,
+      # admin allowlist) live here — bind-mount so they survive a rebuild.
+      - ./src/DeploymentAPI/appsettings.Local.json:/app/appsettings.Local.json
+    expose:
+      - "8080"
+    restart: unless-stopped
+
+  deployment-ui:
+    build:
+      context: ./deployment-ui
+      dockerfile: Dockerfile
+    ports:
+      - "8081:80"
+    depends_on:
+      - deployment-api
+    restart: unless-stopped

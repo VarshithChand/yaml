@@ -1,0 +1,488 @@
+name: Release API
+
+on:
+  workflow_dispatch:
+    inputs:
+
+###############################################################
+# Which APIs to release.
+#
+# This is a required 'choice' with no empty option, so the
+# Run-workflow form CANNOT be submitted without a real
+# selection -- that's how we force "at least one API".
+###############################################################
+
+      services:
+        description: "Which API(s) to release"
+        type: choice
+        required: true
+        default: Admin
+        options:
+          - Admin
+          - PMSCore
+          - Security
+          - "Admin + PMSCore"
+          - "Admin + Security"
+          - "PMSCore + Security"
+          - "Admin + PMSCore + Security"
+
+###############################################################
+# Version per API (only the ones you picked above are used)
+###############################################################
+
+      admin_version:
+        description: "Admin - Artifact Version"
+        type: choice
+        required: true
+        default: New
+        options: [New, Old1, Old2]
+
+      pmscore_version:
+        description: "PMSCore - Artifact Version"
+        type: choice
+        required: true
+        default: New
+        options: [New, Old1, Old2]
+
+      security_version:
+        description: "Security - Artifact Version"
+        type: choice
+        required: true
+        default: New
+        options: [New, Old1, Old2]
+
+###############################################################
+# Targets
+###############################################################
+
+      deploy_rc:
+        description: "Deploy to RC"
+        type: boolean
+        required: true
+        default: true
+
+      deploy_cluster01:
+        description: "Deploy Cluster01"
+        type: boolean
+        required: true
+        default: true
+
+      deploy_cluster02:
+        description: "Deploy Cluster02"
+        type: boolean
+        required: true
+        default: true
+
+      deploy_cluster03:
+        description: "Deploy Cluster03"
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+
+###############################################################
+# Read Config + Build the matrix from the chosen combination
+###############################################################
+
+  read_config:
+
+    name: Read Config & Select Artifacts
+
+    runs-on: ubuntu-latest
+
+    outputs:
+      sprint: ${{ steps.config.outputs.sprint }}
+      patch: ${{ steps.config.outputs.patch }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      selected: ${{ steps.matrix.outputs.selected }}
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+###############################################################
+# Read patch.config
+###############################################################
+
+      - id: config
+        shell: bash
+        run: |
+
+          echo "Branch : $GITHUB_REF_NAME"
+
+          echo "sprint=$(grep '^SPRINT=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+          echo "patch=$(grep '^PATCH=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+
+###############################################################
+# Turn the selected combination into a matrix.
+# Each selected service carries its OWN chosen version.
+###############################################################
+
+      - id: matrix
+        shell: bash
+        run: |
+
+          CHOICE="${{ inputs.services }}"
+          ITEMS=""
+          SELECTED=""
+          SKIPPED=""
+
+          # Adds a service to the matrix ONLY if its chosen version has a zip.
+          # If the folder is empty, the service is skipped (not failed) so the
+          # other selected services can still deploy.
+          add() {
+            # $1 = display name, $2 = artifact folder, $3 = chosen version
+            FOLDER="artifacts/$2/$3"
+
+            # '|| true' -- steps run with 'bash -e -o pipefail', so a
+            # non-matching glob would abort the step before the check below.
+            FILE=$(ls -t ${FOLDER}/*.zip 2>/dev/null | head -1) || true
+
+            if [ -z "$FILE" ]; then
+              echo "SKIP: $1 ($3) -- no artifact in ${FOLDER}"
+              SKIPPED="${SKIPPED}- $1 ($3): no artifact in ${FOLDER}"$'\n'
+              return
+            fi
+
+            echo "ADD : $1 ($3) -> $FILE"
+            [ -n "$ITEMS" ] && ITEMS="${ITEMS},"
+            ITEMS="${ITEMS}{\"name\":\"$1\",\"dir\":\"$2\",\"version\":\"$3\"}"
+            SELECTED="${SELECTED}$1=$3 "
+          }
+
+          # A service is in the run if its name appears in the chosen combo
+          case "$CHOICE" in *Admin*)    add "Admin"    "AdminAPI"    "${{ inputs.admin_version }}" ;; esac
+          case "$CHOICE" in *PMSCore*)  add "PMSCore"  "PMSCoreAPI"  "${{ inputs.pmscore_version }}" ;; esac
+          case "$CHOICE" in *Security*) add "Security" "SecurityAPI" "${{ inputs.security_version }}" ;; esac
+
+          # Warn (do not fail) about anything skipped
+          if [ -n "$SKIPPED" ]; then
+            {
+              echo "## Skipped services"
+              echo ""
+              echo "These selected services had no artifact for the chosen version and were skipped:"
+              echo ""
+              echo "$SKIPPED"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Some selected services were skipped (no artifact for the chosen version)."
+          fi
+
+          # If NOTHING is deployable, then fail -- there is nothing to release.
+          if [ -z "$ITEMS" ]; then
+            {
+              echo "## Nothing to release"
+              echo ""
+              echo "None of the selected services had an artifact for the chosen version."
+              echo ""
+              echo "$SKIPPED"
+              echo "Pick a version that exists (e.g. **New**), or run the build first."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "No deployable artifacts found for any selected service."
+            exit 1
+          fi
+
+          echo "Deploying : $SELECTED"
+
+          echo "matrix={\"include\":[${ITEMS}]}" >> $GITHUB_OUTPUT
+          echo "selected=${SELECTED}" >> $GITHUB_OUTPUT
+
+###############################################################
+# Ensure at least one deploy target is ticked
+###############################################################
+
+      - name: Verify Target Selected
+        shell: bash
+        run: |
+
+          if [ "${{ inputs.deploy_rc }}"        != "true" ] && \
+             [ "${{ inputs.deploy_cluster01 }}" != "true" ] && \
+             [ "${{ inputs.deploy_cluster02 }}" != "true" ] && \
+             [ "${{ inputs.deploy_cluster03 }}" != "true" ]; then
+
+            {
+              echo "## No deployment target selected"
+              echo ""
+              echo "You chose a service but no target to deploy it to."
+              echo ""
+              echo "Re-run and tick at least one of: **RC**, **Cluster01**, **Cluster02**, **Cluster03**."
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            echo "No deployment target selected. Tick at least one of RC / Cluster01/02/03."
+            exit 1
+          fi
+
+          echo "Targets OK."
+
+      - name: Display Configuration
+        run: |
+
+          echo "========================================="
+          echo "Branch   : $GITHUB_REF_NAME"
+          echo "Chosen   : ${{ inputs.services }}"
+          echo "Selected : ${{ steps.matrix.outputs.selected }}"
+          echo "Sprint   : ${{ steps.config.outputs.sprint }}"
+          echo "Patch    : ${{ steps.config.outputs.patch }}"
+          echo "========================================="
+
+###############################################################
+# Deploy RC  (one leg per selected API, each with its own version)
+###############################################################
+
+  deploy_rc:
+
+    if: ${{ inputs.deploy_rc }}
+
+    name: Deploy RC - ${{ matrix.name }} (${{ matrix.version }})
+
+    needs: read_config
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: RC
+
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.read_config.outputs.matrix) }}
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Get Selected Artifact
+        shell: bash
+        run: |
+
+          FOLDER="artifacts/${{ matrix.dir }}/${{ matrix.version }}"
+
+          mkdir -p deploy
+
+          LATEST=$(ls -t ${FOLDER}/*.zip 2>/dev/null | head -1) || true
+
+          if [ -z "$LATEST" ]; then
+            echo "No artifact found in ${FOLDER}."
+            exit 1
+          fi
+
+          echo "Service  : ${{ matrix.name }}"
+          echo "Version  : ${{ matrix.version }}"
+          echo "Artifact : $LATEST"
+
+          cp "$LATEST" deploy/
+
+      - name: Verify Package
+        run: ls -R deploy
+
+      - name: Deploy RC
+        run: |
+
+          mkdir -p "environments/RC/${{ matrix.dir }}"
+          rm -rf "environments/RC/${{ matrix.dir }}"/*
+          cp -R deploy/. "environments/RC/${{ matrix.dir }}/"
+
+          echo "${{ matrix.name }} (${{ matrix.version }}) deployed to RC"
+
+###############################################################
+# Deploy Cluster01
+###############################################################
+
+  deploy_cluster01:
+
+    if: ${{ inputs.deploy_cluster01 }}
+
+    name: Deploy Cluster01 - ${{ matrix.name }} (${{ matrix.version }})
+
+    needs: read_config
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: Cluster01
+
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.read_config.outputs.matrix) }}
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Get Selected Artifact
+        shell: bash
+        run: |
+
+          FOLDER="artifacts/${{ matrix.dir }}/${{ matrix.version }}"
+
+          mkdir -p deploy
+
+          LATEST=$(ls -t ${FOLDER}/*.zip 2>/dev/null | head -1) || true
+
+          if [ -z "$LATEST" ]; then
+            echo "No artifact found in ${FOLDER}."
+            exit 1
+          fi
+
+          echo "Artifact : $LATEST"
+          cp "$LATEST" deploy/
+
+      - name: Deploy Cluster01
+        run: |
+
+          mkdir -p "environments/Cluster01/${{ matrix.dir }}"
+          rm -rf "environments/Cluster01/${{ matrix.dir }}"/*
+          cp -R deploy/. "environments/Cluster01/${{ matrix.dir }}/"
+
+          echo "${{ matrix.name }} (${{ matrix.version }}) deployed to Cluster01"
+
+###############################################################
+# Deploy Cluster02
+###############################################################
+
+  deploy_cluster02:
+
+    if: ${{ inputs.deploy_cluster02 }}
+
+    name: Deploy Cluster02 - ${{ matrix.name }} (${{ matrix.version }})
+
+    needs: read_config
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: Cluster02
+
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.read_config.outputs.matrix) }}
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Get Selected Artifact
+        shell: bash
+        run: |
+
+          FOLDER="artifacts/${{ matrix.dir }}/${{ matrix.version }}"
+
+          mkdir -p deploy
+
+          LATEST=$(ls -t ${FOLDER}/*.zip 2>/dev/null | head -1) || true
+
+          if [ -z "$LATEST" ]; then
+            echo "No artifact found in ${FOLDER}."
+            exit 1
+          fi
+
+          echo "Artifact : $LATEST"
+          cp "$LATEST" deploy/
+
+      - name: Deploy Cluster02
+        run: |
+
+          mkdir -p "environments/Cluster02/${{ matrix.dir }}"
+          rm -rf "environments/Cluster02/${{ matrix.dir }}"/*
+          cp -R deploy/. "environments/Cluster02/${{ matrix.dir }}/"
+
+          echo "${{ matrix.name }} (${{ matrix.version }}) deployed to Cluster02"
+
+###############################################################
+# Deploy Cluster03
+###############################################################
+
+  deploy_cluster03:
+
+    if: ${{ inputs.deploy_cluster03 }}
+
+    name: Deploy Cluster03 - ${{ matrix.name }} (${{ matrix.version }})
+
+    needs: read_config
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: Cluster03
+
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.read_config.outputs.matrix) }}
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Get Selected Artifact
+        shell: bash
+        run: |
+
+          FOLDER="artifacts/${{ matrix.dir }}/${{ matrix.version }}"
+
+          mkdir -p deploy
+
+          LATEST=$(ls -t ${FOLDER}/*.zip 2>/dev/null | head -1) || true
+
+          if [ -z "$LATEST" ]; then
+            echo "No artifact found in ${FOLDER}."
+            exit 1
+          fi
+
+          echo "Artifact : $LATEST"
+          cp "$LATEST" deploy/
+
+      - name: Deploy Cluster03
+        run: |
+
+          mkdir -p "environments/Cluster03/${{ matrix.dir }}"
+          rm -rf "environments/Cluster03/${{ matrix.dir }}"/*
+          cp -R deploy/. "environments/Cluster03/${{ matrix.dir }}/"
+
+          echo "${{ matrix.name }} (${{ matrix.version }}) deployed to Cluster03"
+
+###############################################################
+# Release Summary
+###############################################################
+
+  release_complete:
+
+    name: Release Completed
+
+    needs:
+      - read_config
+      - deploy_rc
+      - deploy_cluster01
+      - deploy_cluster02
+      - deploy_cluster03
+
+    if: always()
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Release Summary
+        run: |
+
+          echo "========================================="
+          echo "API Release Summary"
+          echo "========================================="
+          echo "Branch   : $GITHUB_REF_NAME"
+          echo "Chosen   : ${{ inputs.services }}"
+          echo "Sprint   : ${{ needs.read_config.outputs.sprint }}"
+          echo "Patch    : ${{ needs.read_config.outputs.patch }}"
+          echo ""
+          echo "Released : ${{ needs.read_config.outputs.selected }}"
+          echo ""
+          echo "Deploy RC        : ${{ needs.deploy_rc.result }}"
+          echo "Deploy Cluster01 : ${{ needs.deploy_cluster01.result }}"
+          echo "Deploy Cluster02 : ${{ needs.deploy_cluster02.result }}"
+          echo "Deploy Cluster03 : ${{ needs.deploy_cluster03.result }}"
+          echo "========================================="

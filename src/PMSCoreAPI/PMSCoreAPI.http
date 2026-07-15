@@ -1,0 +1,8 @@
+@PMSCoreAPI_HostAddress = http://localhost:5116
+
+GET {{PMSCoreAPI_HostAddress}}/weatherforecast/
+Accept: application/json
+
+
+
+#
