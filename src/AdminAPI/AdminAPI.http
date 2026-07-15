@@ -2,4 +2,4 @@
 ##
 GET {{AdminAPI_HostAddress}}/weatherforecast/
 Accept: application/json
-###
+#
