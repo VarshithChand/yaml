@@ -1,40 +1,33 @@
-name: Release Admin API (REST)
+name: Release Admin API
 
 on:
   workflow_dispatch:
     inputs:
-
-      artifact_id:
-        description: "GitHub Artifact ID"
-        required: true
-        type: string
-
       deploy_rc:
         description: "Deploy to RC"
+        type: boolean
         required: true
         default: true
-        type: boolean
 
       deploy_cluster01:
         description: "Deploy Cluster01"
+        type: boolean
         required: true
         default: true
-        type: boolean
 
       deploy_cluster02:
         description: "Deploy Cluster02"
+        type: boolean
         required: true
         default: true
-        type: boolean
 
       deploy_cluster03:
         description: "Deploy Cluster03"
+        type: boolean
         required: true
         default: true
-        type: boolean
 
 permissions:
-  actions: read
   contents: read
 
 concurrency:
@@ -44,71 +37,38 @@ concurrency:
 jobs:
 
 ###############################################################
-# Download Selected Artifact
+# Read Configuration
 ###############################################################
 
-  download_artifact:
+  read_config:
 
-    name: Download Selected Artifact
+    name: Read Patch Configuration
 
     runs-on: ubuntu-latest
+
+    outputs:
+      sprint: ${{ steps.config.outputs.sprint }}
+      patch: ${{ steps.config.outputs.patch }}
 
     steps:
 
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Display Inputs
+      - id: config
+        shell: bash
         run: |
-          echo "Repository : ${{ github.repository }}"
-          echo "Branch     : ${{ github.ref_name }}"
-          echo "Artifact ID: ${{ inputs.artifact_id }}"
-
-      - name: Download Artifact Using REST API
-
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          echo "Branch : $GITHUB_REF_NAME"
+          echo "sprint=$(grep '^SPRINT=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+          echo "patch=$(grep '^PATCH=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+      - name: Display Configuration
 
         run: |
-
-          curl -L \
-          -H "Authorization: Bearer $GH_TOKEN" \
-          -H "Accept: application/vnd.github+json" \
-          https://api.github.com/repos/${{ github.repository }}/actions/artifacts/${{ inputs.artifact_id }}/zip \
-          -o AdminAPI.zip
-
-      - name: Verify Download
-
-        run: |
-
-          ls -lh
-
-      - name: Extract Artifact
-
-        run: |
-
-          mkdir -p deploy
-
-          unzip AdminAPI.zip -d deploy
-
-      - name: Verify Extracted Files
-
-        run: |
-
-          ls -R deploy
-
-      - name: Upload Deploy Files
-
-        uses: actions/upload-artifact@v4
-
-        with:
-
-          name: deploy-files
-
-          path: deploy
-
+          echo "Branch : $GITHUB_REF_NAME"
+          echo "Sprint : ${{ steps.config.outputs.sprint }}"
+          echo "Patch  : ${{ steps.config.outputs.patch }}"
 ###############################################################
-# RC Deployment
+# Deploy RC
 ###############################################################
 
   deploy_rc:
@@ -117,7 +77,7 @@ jobs:
 
     name: Deploy RC
 
-    needs: download_artifact
+    needs: read_config
 
     runs-on: ubuntu-latest
 
@@ -126,58 +86,37 @@ jobs:
 
     steps:
 
-      - name: Download Deploy Files
+      - uses: actions/checkout@v4
 
-        uses: actions/download-artifact@v4
+      - name: Get Latest Artifact
 
-        with:
-
-          name: deploy-files
-
-          path: deploy
-
-      - name: Verify Files
+        shell: bash
 
         run: |
+          mkdir -p deploy
+          LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
+          echo "Artifact : $LATEST"
+          cp "$LATEST" deploy/
+      - name: Verify Package
 
-          ls -R deploy
+        run: ls -R deploy
 
-      - name: Deploy To RC
+      - name: Deploy RC
 
         run: |
-
           mkdir -p environments/RC
-
           cp -R deploy/. environments/RC/
-
-      - name: Verify RC Deployment
-
-        run: |
-
-          echo "RC Deployment Completed"
-
-          ls -R environments/RC
-
-      - name: Upload RC Package
-
-        uses: actions/upload-artifact@v4
-
-        with:
-
-          name: rc-package
-
-          path: environments/RC
 ###############################################################
-# Production Deployment
+# Deploy Cluster01
 ###############################################################
 
-  deploy_production:
+  deploy_cluster01:
 
-    name: Deploy Production
+    if: ${{ inputs.deploy_cluster01 }}
 
-    needs:
-      - download_artifact
-      - deploy_rc
+    name: Deploy Cluster01
+
+    needs: read_config
 
     runs-on: ubuntu-latest
 
@@ -186,126 +125,100 @@ jobs:
 
     steps:
 
-      - name: Download Deploy Files
+      - uses: actions/checkout@v4
 
-        uses: actions/download-artifact@v4
-
-        with:
-          name: deploy-files
-          path: deploy
-
-      - name: Verify Files
+      - name: Get Latest Artifact
 
         run: |
-          ls -R deploy
-
-###############################################################
-# Cluster01
-###############################################################
-
+          mkdir -p deploy
+          LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
+          echo "Artifact : $LATEST"
+          cp "$LATEST" deploy/
       - name: Deploy Cluster01
 
-        if: ${{ inputs.deploy_cluster01 }}
+        run: |
+          mkdir -p environments/Cluster01
+          cp -R deploy/. environments/Cluster01/
+###############################################################
+# Deploy Cluster02
+###############################################################
+
+  deploy_cluster02:
+
+    if: ${{ inputs.deploy_cluster02 }}
+
+    name: Deploy Cluster02
+
+    needs: read_config
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: Production
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Get Latest Artifact
 
         run: |
-
-          echo "================================="
-          echo "Deploying to Cluster01"
-          echo "================================="
-
-          mkdir -p environments/Cluster01
-
-          cp -R deploy/. environments/Cluster01/
-
-###############################################################
-# Cluster02
-###############################################################
-
+          mkdir -p deploy
+          LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
+          echo "Artifact : $LATEST"
+          cp "$LATEST" deploy/
       - name: Deploy Cluster02
 
-        if: ${{ inputs.deploy_cluster02 }}
+        run: |
+          mkdir -p environments/Cluster02
+          cp -R deploy/. environments/Cluster02/
+###############################################################
+# Deploy Cluster03
+###############################################################
+
+  deploy_cluster03:
+
+    if: ${{ inputs.deploy_cluster03 }}
+
+    name: Deploy Cluster03
+
+    needs: read_config
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: Production
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Get Latest Artifact
 
         run: |
-
-          echo "================================="
-          echo "Deploying to Cluster02"
-          echo "================================="
-
-          mkdir -p environments/Cluster02
-
-          cp -R deploy/. environments/Cluster02/
-
-###############################################################
-# Cluster03
-###############################################################
-
+          mkdir -p deploy
+          LATEST=$(ls -t artifacts/AdminAPI/New/*.zip | head -1)
+          echo "Artifact : $LATEST"
+          cp "$LATEST" deploy/
       - name: Deploy Cluster03
 
-        if: ${{ inputs.deploy_cluster03 }}
-
         run: |
-
-          echo "================================="
-          echo "Deploying to Cluster03"
-          echo "================================="
-
           mkdir -p environments/Cluster03
-
           cp -R deploy/. environments/Cluster03/
-
-###############################################################
-# Verify Deployment
-###############################################################
-
-      - name: Verify Deployment
-
-        run: |
-
-          echo "================================="
-          echo "Deployment Verification"
-          echo "================================="
-
-          echo "RC"
-          ls -R environments/RC || true
-
-          echo ""
-
-          echo "Cluster01"
-          ls -R environments/Cluster01 || true
-
-          echo ""
-
-          echo "Cluster02"
-          ls -R environments/Cluster02 || true
-
-          echo ""
-
-          echo "Cluster03"
-          ls -R environments/Cluster03 || true
-
-###############################################################
-# Upload Deployment Package
-###############################################################
-
-      - name: Upload Deployment Result
-
-        uses: actions/upload-artifact@v4
-
-        with:
-          name: DeploymentResult
-          path: environments
-
 ###############################################################
 # Release Summary
 ###############################################################
 
-  release_summary:
+  release_complete:
 
-    name: Release Summary
+    name: Release Completed
 
     needs:
-      - download_artifact
-      - deploy_production
+      - read_config
+      - deploy_rc
+      - deploy_cluster01
+      - deploy_cluster02
+      - deploy_cluster03
 
     if: always()
 
@@ -313,123 +226,18 @@ jobs:
 
     steps:
 
-      - name: Generate Release Summary
+      - name: Release Summary
 
         run: |
-
-          echo "==============================================="
-          echo "        ADMIN API RELEASE SUMMARY"
-          echo "==============================================="
-
+          echo "========================================="
+          echo "Admin API Release Summary"
+          echo "========================================="
+          echo "Branch : $GITHUB_REF_NAME"
+          echo "Sprint : ${{ needs.read_config.outputs.sprint }}"
+          echo "Patch  : ${{ needs.read_config.outputs.patch }}"
           echo ""
-          echo "Repository"
-          echo "${{ github.repository }}"
-
-          echo ""
-
-          echo "Branch"
-          echo "${{ github.ref_name }}"
-
-          echo ""
-
-          echo "Workflow"
-          echo "${{ github.workflow }}"
-
-          echo ""
-
-          echo "Run Number"
-          echo "${{ github.run_number }}"
-
-          echo ""
-
-          echo "Run ID"
-          echo "${{ github.run_id }}"
-
-          echo ""
-
-          echo "Triggered By"
-          echo "${{ github.actor }}"
-
-          echo ""
-
-          echo "Artifact ID"
-          echo "${{ inputs.artifact_id }}"
-
-          echo ""
-
-          echo "Deployment Targets"
-
-          if [ "${{ inputs.deploy_rc }}" = "true" ]; then
-            echo "✔ RC"
-          fi
-
-          if [ "${{ inputs.deploy_cluster01 }}" = "true" ]; then
-            echo "✔ Cluster01"
-          fi
-
-          if [ "${{ inputs.deploy_cluster02 }}" = "true" ]; then
-            echo "✔ Cluster02"
-          fi
-
-          if [ "${{ inputs.deploy_cluster03 }}" = "true" ]; then
-            echo "✔ Cluster03"
-          fi
-
-          echo ""
-          echo "==============================================="
-          echo "Release Completed Successfully"
-          echo "==============================================="
-
-###############################################################
-# Create Release Report
-###############################################################
-
-      - name: Create Release Report
-
-        run: |
-
-          cat <<EOF > ReleaseReport.txt
-
-          ===============================================
-
-          ADMIN API RELEASE REPORT
-
-          ===============================================
-
-          Repository : ${{ github.repository }}
-
-          Branch     : ${{ github.ref_name }}
-
-          Workflow   : ${{ github.workflow }}
-
-          Run Number : ${{ github.run_number }}
-
-          Run ID     : ${{ github.run_id }}
-
-          Triggered By : ${{ github.actor }}
-
-          Artifact ID  : ${{ inputs.artifact_id }}
-
-          RC          : ${{ inputs.deploy_rc }}
-
-          Cluster01   : ${{ inputs.deploy_cluster01 }}
-
-          Cluster02   : ${{ inputs.deploy_cluster02 }}
-
-          Cluster03   : ${{ inputs.deploy_cluster03 }}
-
-          ===============================================
-
-          STATUS : SUCCESS
-
-          ===============================================
-
-          EOF
-
-      - name: Upload Release Report
-
-        uses: actions/upload-artifact@v4
-
-        with:
-          name: ReleaseReport
-          path: ReleaseReport.txt
+          echo "Deploy RC         : ${{ inputs.deploy_rc }}"
+          echo "Deploy Cluster01  : ${{ inputs.deploy_cluster01 }}"
+          echo "Deploy Cluster02  : ${{ inputs.deploy_cluster02 }}"
+          echo "Deploy Cluster03  : ${{ inputs.deploy_cluster03 }}"
+          echo "========================================="
