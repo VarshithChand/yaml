@@ -2,4 +2,5 @@
 
 GET {{SecurityAPI_HostAddress}}/weatherforecast/
 Accept: application/json
+
 ##
