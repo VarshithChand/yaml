@@ -102,12 +102,95 @@ concurrency:
 jobs:
 
 ###############################################################
+# Guard -- runs FIRST, before anything else.
+#
+# If no API checkbox is ticked, stop here with a clear,
+# friendly message telling the user what to do, and write it
+# to the run summary so it's visible without opening logs.
+###############################################################
+
+  guard:
+
+    name: Check Selection
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Ensure At Least One API Is Selected
+        shell: bash
+        run: |
+
+          if [ "${{ inputs.svc_admin }}"    != "true" ] && \
+             [ "${{ inputs.svc_pmscore }}"  != "true" ] && \
+             [ "${{ inputs.svc_security }}" != "true" ]; then
+
+            {
+              echo "## No API selected"
+              echo ""
+              echo "You started the release without choosing any service."
+              echo ""
+              echo "Please **Run workflow** again and tick at least one of:"
+              echo "- Release Admin API"
+              echo "- Release PMSCore API"
+              echo "- Release Security API"
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            echo "=================================================="
+            echo " No API selected."
+            echo " Re-run the workflow and tick at least one service:"
+            echo "   - Release Admin API"
+            echo "   - Release PMSCore API"
+            echo "   - Release Security API"
+            echo "=================================================="
+
+            exit 1
+          fi
+
+          echo "Selection OK."
+
+###############################################################
+# Ensure the chosen targets aren't all unticked either
+###############################################################
+
+      - name: Ensure At Least One Target Is Selected
+        shell: bash
+        run: |
+
+          if [ "${{ inputs.deploy_rc }}"        != "true" ] && \
+             [ "${{ inputs.deploy_cluster01 }}" != "true" ] && \
+             [ "${{ inputs.deploy_cluster02 }}" != "true" ] && \
+             [ "${{ inputs.deploy_cluster03 }}" != "true" ]; then
+
+            {
+              echo "## No deployment target selected"
+              echo ""
+              echo "You picked a service but no target to deploy it to."
+              echo ""
+              echo "Please **Run workflow** again and tick at least one of:"
+              echo "- Deploy to RC"
+              echo "- Deploy Cluster01 / Cluster02 / Cluster03"
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            echo "=================================================="
+            echo " No deployment target selected."
+            echo " Re-run and tick at least one of RC / Cluster01/02/03."
+            echo "=================================================="
+
+            exit 1
+          fi
+
+          echo "Targets OK."
+
+###############################################################
 # Read Config + Build list of selected services & versions
 ###############################################################
 
   read_config:
 
     name: Read Config & Select Artifacts
+
+    needs: guard
 
     runs-on: ubuntu-latest
 
@@ -165,11 +248,6 @@ jobs:
             add "Security" "SecurityAPI" "${{ inputs.security_version }}"
           fi
 
-          if [ -z "$ITEMS" ]; then
-            echo "No API selected. Tick at least one service."
-            exit 1
-          fi
-
           echo "Selected : $SELECTED"
 
           echo "matrix={\"include\":[${ITEMS}]}" >> $GITHUB_OUTPUT
@@ -183,7 +261,7 @@ jobs:
         shell: bash
         run: |
 
-          MISSING=0
+          MISSING=""
 
           check() {
             # $1 = artifact folder, $2 = chosen version
@@ -196,7 +274,7 @@ jobs:
 
             if [ -z "$FILE" ]; then
               echo "MISSING: no artifact in ${FOLDER}"
-              MISSING=1
+              MISSING="${MISSING}- ${FOLDER}"$'\n'
             else
               echo "OK: $FILE"
             fi
@@ -214,7 +292,17 @@ jobs:
             check "SecurityAPI" "${{ inputs.security_version }}"
           fi
 
-          if [ "$MISSING" = "1" ]; then
+          if [ -n "$MISSING" ]; then
+
+            {
+              echo "## Artifact not found"
+              echo ""
+              echo "These selected services have no artifact for the chosen version:"
+              echo ""
+              echo "$MISSING"
+              echo "Pick a version that exists (e.g. **New**), or run the build first."
+            } >> "$GITHUB_STEP_SUMMARY"
+
             echo "One or more selected services have no artifact for the chosen version."
             exit 1
           fi
@@ -262,9 +350,6 @@ jobs:
 
           mkdir -p deploy
 
-          # '|| true' + explicit check: with 'bash -e -o pipefail' a non-matching
-          # glob would abort the step with a bare "exit code 2" instead of a
-          # readable error.
           LATEST=$(ls -t ${FOLDER}/*.zip 2>/dev/null | head -1) || true
 
           if [ -z "$LATEST" ]; then
@@ -323,9 +408,6 @@ jobs:
 
           mkdir -p deploy
 
-          # '|| true' + explicit check: with 'bash -e -o pipefail' a non-matching
-          # glob would abort the step with a bare "exit code 2" instead of a
-          # readable error.
           LATEST=$(ls -t ${FOLDER}/*.zip 2>/dev/null | head -1) || true
 
           if [ -z "$LATEST" ]; then
@@ -378,9 +460,6 @@ jobs:
 
           mkdir -p deploy
 
-          # '|| true' + explicit check: with 'bash -e -o pipefail' a non-matching
-          # glob would abort the step with a bare "exit code 2" instead of a
-          # readable error.
           LATEST=$(ls -t ${FOLDER}/*.zip 2>/dev/null | head -1) || true
 
           if [ -z "$LATEST" ]; then
@@ -433,9 +512,6 @@ jobs:
 
           mkdir -p deploy
 
-          # '|| true' + explicit check: with 'bash -e -o pipefail' a non-matching
-          # glob would abort the step with a bare "exit code 2" instead of a
-          # readable error.
           LATEST=$(ls -t ${FOLDER}/*.zip 2>/dev/null | head -1) || true
 
           if [ -z "$LATEST" ]; then
