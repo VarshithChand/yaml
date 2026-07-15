@@ -5,64 +5,51 @@ on:
     inputs:
 
 ###############################################################
-# Admin API
+# Which APIs to release.
+#
+# This is a required 'choice' with no empty option, so the
+# Run-workflow form CANNOT be submitted without a real
+# selection -- that's how we force "at least one API".
 ###############################################################
 
-      svc_admin:
-        description: "Release Admin API"
-        type: boolean
+      services:
+        description: "Which API(s) to release"
+        type: choice
         required: true
-        default: true
+        default: Admin
+        options:
+          - Admin
+          - PMSCore
+          - Security
+          - "Admin + PMSCore"
+          - "Admin + Security"
+          - "PMSCore + Security"
+          - "Admin + PMSCore + Security"
+
+###############################################################
+# Version per API (only the ones you picked above are used)
+###############################################################
 
       admin_version:
         description: "Admin - Artifact Version"
         type: choice
         required: true
         default: New
-        options:
-          - New
-          - Old1
-          - Old2
-
-###############################################################
-# PMSCore API
-###############################################################
-
-      svc_pmscore:
-        description: "Release PMSCore API"
-        type: boolean
-        required: true
-        default: false
+        options: [New, Old1, Old2]
 
       pmscore_version:
         description: "PMSCore - Artifact Version"
         type: choice
         required: true
         default: New
-        options:
-          - New
-          - Old1
-          - Old2
-
-###############################################################
-# Security API
-###############################################################
-
-      svc_security:
-        description: "Release Security API"
-        type: boolean
-        required: true
-        default: false
+        options: [New, Old1, Old2]
 
       security_version:
         description: "Security - Artifact Version"
         type: choice
         required: true
         default: New
-        options:
-          - New
-          - Old1
-          - Old2
+        options: [New, Old1, Old2]
 
 ###############################################################
 # Targets
@@ -102,95 +89,12 @@ concurrency:
 jobs:
 
 ###############################################################
-# Guard -- runs FIRST, before anything else.
-#
-# If no API checkbox is ticked, stop here with a clear,
-# friendly message telling the user what to do, and write it
-# to the run summary so it's visible without opening logs.
-###############################################################
-
-  guard:
-
-    name: Check Selection
-
-    runs-on: ubuntu-latest
-
-    steps:
-
-      - name: Ensure At Least One API Is Selected
-        shell: bash
-        run: |
-
-          if [ "${{ inputs.svc_admin }}"    != "true" ] && \
-             [ "${{ inputs.svc_pmscore }}"  != "true" ] && \
-             [ "${{ inputs.svc_security }}" != "true" ]; then
-
-            {
-              echo "## No API selected"
-              echo ""
-              echo "You started the release without choosing any service."
-              echo ""
-              echo "Please **Run workflow** again and tick at least one of:"
-              echo "- Release Admin API"
-              echo "- Release PMSCore API"
-              echo "- Release Security API"
-            } >> "$GITHUB_STEP_SUMMARY"
-
-            echo "=================================================="
-            echo " No API selected."
-            echo " Re-run the workflow and tick at least one service:"
-            echo "   - Release Admin API"
-            echo "   - Release PMSCore API"
-            echo "   - Release Security API"
-            echo "=================================================="
-
-            exit 1
-          fi
-
-          echo "Selection OK."
-
-###############################################################
-# Ensure the chosen targets aren't all unticked either
-###############################################################
-
-      - name: Ensure At Least One Target Is Selected
-        shell: bash
-        run: |
-
-          if [ "${{ inputs.deploy_rc }}"        != "true" ] && \
-             [ "${{ inputs.deploy_cluster01 }}" != "true" ] && \
-             [ "${{ inputs.deploy_cluster02 }}" != "true" ] && \
-             [ "${{ inputs.deploy_cluster03 }}" != "true" ]; then
-
-            {
-              echo "## No deployment target selected"
-              echo ""
-              echo "You picked a service but no target to deploy it to."
-              echo ""
-              echo "Please **Run workflow** again and tick at least one of:"
-              echo "- Deploy to RC"
-              echo "- Deploy Cluster01 / Cluster02 / Cluster03"
-            } >> "$GITHUB_STEP_SUMMARY"
-
-            echo "=================================================="
-            echo " No deployment target selected."
-            echo " Re-run and tick at least one of RC / Cluster01/02/03."
-            echo "=================================================="
-
-            exit 1
-          fi
-
-          echo "Targets OK."
-
-###############################################################
-# Read Config + Build list of selected services & versions
+# Read Config + Build the matrix from the chosen combination
 ###############################################################
 
   read_config:
 
     name: Read Config & Select Artifacts
-
-    needs: guard
 
     runs-on: ubuntu-latest
 
@@ -219,13 +123,15 @@ jobs:
           echo "patch=$(grep '^PATCH=' config/patch.config | cut -d '=' -f2)" >> $GITHUB_OUTPUT
 
 ###############################################################
-# Build matrix -- each selected service carries its OWN version
+# Turn the selected combination into a matrix.
+# Each selected service carries its OWN chosen version.
 ###############################################################
 
       - id: matrix
         shell: bash
         run: |
 
+          CHOICE="${{ inputs.services }}"
           ITEMS=""
           SELECTED=""
 
@@ -236,17 +142,10 @@ jobs:
             SELECTED="${SELECTED}$1=$3 "
           }
 
-          if [ "${{ inputs.svc_admin }}" = "true" ]; then
-            add "Admin" "AdminAPI" "${{ inputs.admin_version }}"
-          fi
-
-          if [ "${{ inputs.svc_pmscore }}" = "true" ]; then
-            add "PMSCore" "PMSCoreAPI" "${{ inputs.pmscore_version }}"
-          fi
-
-          if [ "${{ inputs.svc_security }}" = "true" ]; then
-            add "Security" "SecurityAPI" "${{ inputs.security_version }}"
-          fi
+          # A service is in the run if its name appears in the chosen combo
+          case "$CHOICE" in *Admin*)    add "Admin"    "AdminAPI"    "${{ inputs.admin_version }}" ;; esac
+          case "$CHOICE" in *PMSCore*)  add "PMSCore"  "PMSCoreAPI"  "${{ inputs.pmscore_version }}" ;; esac
+          case "$CHOICE" in *Security*) add "Security" "SecurityAPI" "${{ inputs.security_version }}" ;; esac
 
           echo "Selected : $SELECTED"
 
@@ -254,22 +153,49 @@ jobs:
           echo "selected=${SELECTED}" >> $GITHUB_OUTPUT
 
 ###############################################################
-# Verify each selected service has its chosen version
+# Ensure at least one deploy target is ticked
+###############################################################
+
+      - name: Verify Target Selected
+        shell: bash
+        run: |
+
+          if [ "${{ inputs.deploy_rc }}"        != "true" ] && \
+             [ "${{ inputs.deploy_cluster01 }}" != "true" ] && \
+             [ "${{ inputs.deploy_cluster02 }}" != "true" ] && \
+             [ "${{ inputs.deploy_cluster03 }}" != "true" ]; then
+
+            {
+              echo "## No deployment target selected"
+              echo ""
+              echo "You chose a service but no target to deploy it to."
+              echo ""
+              echo "Re-run and tick at least one of: **RC**, **Cluster01**, **Cluster02**, **Cluster03**."
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            echo "No deployment target selected. Tick at least one of RC / Cluster01/02/03."
+            exit 1
+          fi
+
+          echo "Targets OK."
+
+###############################################################
+# Verify each selected service has its chosen version on disk
 ###############################################################
 
       - name: Verify Selected Artifacts Exist
         shell: bash
         run: |
 
+          CHOICE="${{ inputs.services }}"
           MISSING=""
 
           check() {
             # $1 = artifact folder, $2 = chosen version
             FOLDER="artifacts/$1/$2"
 
-            # '|| true' is required: GitHub runs steps with 'bash -e -o pipefail',
-            # so a non-matching glob makes ls exit 2 and kills the whole step
-            # before the [ -z ] check below can report MISSING.
+            # '|| true' -- steps run with 'bash -e -o pipefail', so a non-matching
+            # glob makes ls exit 2 and kills the step before we can report MISSING.
             FILE=$(ls -t ${FOLDER}/*.zip 2>/dev/null | head -1) || true
 
             if [ -z "$FILE" ]; then
@@ -280,17 +206,9 @@ jobs:
             fi
           }
 
-          if [ "${{ inputs.svc_admin }}" = "true" ]; then
-            check "AdminAPI" "${{ inputs.admin_version }}"
-          fi
-
-          if [ "${{ inputs.svc_pmscore }}" = "true" ]; then
-            check "PMSCoreAPI" "${{ inputs.pmscore_version }}"
-          fi
-
-          if [ "${{ inputs.svc_security }}" = "true" ]; then
-            check "SecurityAPI" "${{ inputs.security_version }}"
-          fi
+          case "$CHOICE" in *Admin*)    check "AdminAPI"    "${{ inputs.admin_version }}" ;; esac
+          case "$CHOICE" in *PMSCore*)  check "PMSCoreAPI"  "${{ inputs.pmscore_version }}" ;; esac
+          case "$CHOICE" in *Security*) check "SecurityAPI" "${{ inputs.security_version }}" ;; esac
 
           if [ -n "$MISSING" ]; then
 
@@ -312,6 +230,7 @@ jobs:
 
           echo "========================================="
           echo "Branch   : $GITHUB_REF_NAME"
+          echo "Chosen   : ${{ inputs.services }}"
           echo "Selected : ${{ steps.matrix.outputs.selected }}"
           echo "Sprint   : ${{ steps.config.outputs.sprint }}"
           echo "Patch    : ${{ steps.config.outputs.patch }}"
@@ -559,6 +478,7 @@ jobs:
           echo "API Release Summary"
           echo "========================================="
           echo "Branch   : $GITHUB_REF_NAME"
+          echo "Chosen   : ${{ inputs.services }}"
           echo "Sprint   : ${{ needs.read_config.outputs.sprint }}"
           echo "Patch    : ${{ needs.read_config.outputs.patch }}"
           echo ""
