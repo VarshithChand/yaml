@@ -27,6 +27,7 @@ jobs:
       sprint: ${{ steps.config.outputs.sprint }}
       patch: ${{ steps.config.outputs.patch }}
       version: ${{ steps.config.outputs.version }}
+      timestamp: ${{ steps.config.outputs.timestamp }}
 
     steps:
 
@@ -39,6 +40,7 @@ jobs:
           echo "sprint=$(grep '^SPRINT=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_OUTPUT
           echo "patch=$(grep '^PATCH=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_OUTPUT
           echo "version=$(grep '^VERSION=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+          echo "timestamp=$(TZ=Asia/Kolkata date +"%Y%m%d_%H%M%S")" >> $GITHUB_OUTPUT
 
       - name: Display Configuration
         run: |
@@ -87,7 +89,7 @@ jobs:
       - name: Upload Publish Files
         uses: actions/upload-artifact@v4
         with:
-          name: publish-files
+          name: publish-files-${{ needs.read_config.outputs.timestamp }}
           path: publish/SecurityAPI
 
   artifact_management:
@@ -117,7 +119,7 @@ jobs:
       - name: Download Publish Files
         uses: actions/download-artifact@v4
         with:
-          name: publish-files
+          name: publish-files-${{ needs.read_config.outputs.timestamp }}
           path: publish/SecurityAPI
 
       - name: Install Zip
@@ -249,7 +251,7 @@ jobs:
       - name: Upload GitHub Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SecurityAPI-Latest
+          name: SecurityAPI-Latest-${{ needs.read_config.outputs.timestamp }}
           path: artifacts/SecurityAPI/New/${{ env.ARTIFACT_NAME }}
           retention-days: 30
           if-no-files-found: error

@@ -1,0 +1,172 @@
+using System.Text;
+using DeploymentAPI.Configuration;
+using DeploymentAPI.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+
+var builder = WebApplication.CreateBuilder(args);
+
+//
+// Configuration
+// appsettings.Local.json holds real secrets (GitHub PAT) and is gitignored;
+// it overrides the placeholder values checked into appsettings.json.
+//
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+
+builder.Services.Configure<GitHubSettings>(
+    builder.Configuration.GetSection("GitHub"));
+
+builder.Services.Configure<NotificationSettings>(
+    builder.Configuration.GetSection("Notifications"));
+
+builder.Services.Configure<DockerSettings>(
+    builder.Configuration.GetSection("Docker"));
+
+builder.Services.Configure<JwtSettings>(
+    builder.Configuration.GetSection("Jwt"));
+
+builder.Services.Configure<GitHubOAuthSettings>(
+    builder.Configuration.GetSection("GitHubOAuth"));
+
+builder.Services.Configure<AuthorizationSettings>(
+    builder.Configuration.GetSection("Auth"));
+
+//
+// Controllers
+//
+builder.Services.AddControllers();
+
+//
+// Swagger
+//
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+//
+// HttpClient
+//
+builder.Services.AddHttpClient();
+builder.Services.AddMemoryCache();
+
+//
+// Dependency Injection
+//
+builder.Services.AddSingleton<GitHubAuthService>();
+builder.Services.AddScoped<GitHubApiService>();
+builder.Services.AddScoped<DeploymentService>();
+builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<SettingsService>();
+builder.Services.AddScoped<AuthService>();
+
+//
+// CORS
+// Credentials (the portal_token cookie) require a specific origin list,
+// not AllowAnyOrigin, per the CORS spec.
+//
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? new[] { "http://localhost:5173" };
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("ReactPolicy", policy =>
+    {
+        policy
+            .WithOrigins(corsOrigins)
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
+});
+
+//
+// Authentication (JWT issued via GitHub OAuth login, carried in an
+// httpOnly cookie rather than a header so it's never readable by page JS)
+//
+var jwtSettings = builder.Configuration.GetSection("Jwt");
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwtSettings["Issuer"],
+            ValidateAudience = true,
+            ValidAudience = jwtSettings["Audience"],
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(jwtSettings["Secret"] ?? string.Empty)),
+            ValidateLifetime = true
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                if (context.Request.Cookies.TryGetValue("portal_token", out var token))
+                {
+                    context.Token = token;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
+    });
+
+builder.Services.AddAuthorization();
+
+var app = builder.Build();
+
+//
+// Error handling — surface GitHub API failures (rate limits, 404s, etc.) as a
+// clean JSON message instead of an unhandled 500 with no body reaching the UI.
+//
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (HttpRequestException ex)
+    {
+        context.Response.StatusCode = (int?)ex.StatusCode ?? StatusCodes.Status502BadGateway;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new { message = ex.Message });
+    }
+});
+
+//
+// Swagger
+//
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+//
+// HTTPS
+//
+app.UseHttpsRedirection();
+
+//
+// CORS
+//
+app.UseCors("ReactPolicy");
+
+//
+// Authentication / Authorization
+//
+app.UseAuthentication();
+app.UseAuthorization();
+
+//
+// Controllers
+//
+app.MapControllers();
+
+//
+// Run
+//
+app.Run();

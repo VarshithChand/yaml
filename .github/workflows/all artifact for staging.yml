@@ -93,6 +93,7 @@ jobs:
       dir: ${{ steps.detect.outputs.dir }}           # AdminAPI | PMSCoreAPI | SecurityAPI
       sprint: ${{ steps.config.outputs.sprint }}
       patch: ${{ steps.config.outputs.patch }}
+      timestamp: ${{ steps.config.outputs.timestamp }}
 
     steps:
       - uses: actions/checkout@v4
@@ -143,6 +144,7 @@ jobs:
         run: |
           echo "sprint=$(grep '^SPRINT=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_OUTPUT
           echo "patch=$(grep '^PATCH=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+          echo "timestamp=$(TZ=Asia/Kolkata date +"%Y%m%d_%H%M%S")" >> $GITHUB_OUTPUT
 
 ###############################################################
 # 2. Build (dynamic per detected service)
@@ -181,7 +183,7 @@ jobs:
       - name: Upload Publish Files
         uses: actions/upload-artifact@v4
         with:
-          name: publish-files
+          name: publish-files-${{ needs.setup.outputs.timestamp }}
           path: publish/${{ needs.setup.outputs.dir }}
 
 ###############################################################
@@ -217,7 +219,7 @@ jobs:
       - name: Download Publish Files
         uses: actions/download-artifact@v4
         with:
-          name: publish-files
+          name: publish-files-${{ needs.setup.outputs.timestamp }}
           path: publish/${{ needs.setup.outputs.dir }}
 
       - name: Install Zip
@@ -335,7 +337,7 @@ jobs:
       - name: Upload Release Zip
         uses: actions/upload-artifact@v4
         with:
-          name: ReleaseZip
+          name: ReleaseZip-${{ needs.setup.outputs.timestamp }}
           path: artifacts/${{ needs.setup.outputs.dir }}/New/${{ steps.zip.outputs.artifact_name }}
           retention-days: 30
           if-no-files-found: error
@@ -360,6 +362,7 @@ jobs:
       sprint: ${{ needs.setup.outputs.sprint }}
       patch: ${{ needs.setup.outputs.patch }}
       artifact: ${{ needs.artifact_management.outputs.artifact }}
+      timestamp: ${{ needs.setup.outputs.timestamp }}
 
     env:
       ARTIFACT: ${{ needs.artifact_management.outputs.artifact }}
@@ -370,7 +373,7 @@ jobs:
       - name: Download Release Zip
         uses: actions/download-artifact@v4
         with:
-          name: ReleaseZip
+          name: ReleaseZip-${{ needs.setup.outputs.timestamp }}
           path: incoming
 
       - name: Prepare Package
@@ -413,7 +416,7 @@ jobs:
       - name: Upload Staged Package
         uses: actions/upload-artifact@v4
         with:
-          name: StagedPackage
+          name: StagedPackage-${{ needs.setup.outputs.timestamp }}
           path: staging
           retention-days: 30
           if-no-files-found: error
@@ -452,7 +455,7 @@ jobs:
       - name: Download Staged Package
         uses: actions/download-artifact@v4
         with:
-          name: StagedPackage
+          name: StagedPackage-${{ needs.stage.outputs.timestamp }}
           path: staging
 
       - name: Deploy RC
@@ -497,7 +500,7 @@ jobs:
       - name: Download Staged Package
         uses: actions/download-artifact@v4
         with:
-          name: StagedPackage
+          name: StagedPackage-${{ needs.stage.outputs.timestamp }}
           path: staging
 
       - name: Deploy Cluster01
@@ -541,7 +544,7 @@ jobs:
       - name: Download Staged Package
         uses: actions/download-artifact@v4
         with:
-          name: StagedPackage
+          name: StagedPackage-${{ needs.stage.outputs.timestamp }}
           path: staging
 
       - name: Deploy Cluster02
@@ -585,7 +588,7 @@ jobs:
       - name: Download Staged Package
         uses: actions/download-artifact@v4
         with:
-          name: StagedPackage
+          name: StagedPackage-${{ needs.stage.outputs.timestamp }}
           path: staging
 
       - name: Deploy Cluster03

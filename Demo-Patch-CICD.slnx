@@ -3,5 +3,6 @@
     <Project Path="src/AdminAPI/AdminAPI.csproj" />
     <Project Path="src/PMSCoreAPI/PMSCoreAPI.csproj" />
     <Project Path="src/SecurityAPI/SecurityAPI.csproj" />
+    <Project Path="src/DeploymentAPI/DeploymentAPI.csproj" />
   </Folder>
 </Solution>

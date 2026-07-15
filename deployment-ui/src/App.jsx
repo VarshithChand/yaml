@@ -1,0 +1,36 @@
+import Dashboard from "./pages/Dashboard";
+import Deploy from "./pages/Deploy";
+import Storage from "./pages/Storage";
+import History from "./pages/History";
+import Analytics from "./pages/Analytics";
+import Timeline from "./pages/Timeline";
+import Settings from "./pages/Settings";
+
+import TopBar from "./components/layout/TopBar";
+import useNavigation from "./hooks/useNavigation";
+
+function App(){
+
+    const { tab } = useNavigation();
+
+    return(
+
+        <>
+
+            <TopBar />
+
+            {tab === "dashboard" && <Dashboard/>}
+            {tab === "deploy" && <Deploy/>}
+            {tab === "storage" && <Storage/>}
+            {tab === "analytics" && <Analytics/>}
+            {tab === "timeline" && <Timeline/>}
+            {tab === "history" && <History/>}
+            {tab === "settings" && <Settings/>}
+
+        </>
+
+    );
+
+}
+
+export default App;
