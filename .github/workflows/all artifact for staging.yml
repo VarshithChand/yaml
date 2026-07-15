@@ -1,0 +1,547 @@
+name: Build & Release
+
+###############################################################
+# ONE combined pipeline for ALL THREE APIs (single run)
+#
+#   push to src/<Service>/**   OR   manual dispatch (pick service)
+#            |
+#            v
+#   [ Setup ]   detect which service + read sprint/patch
+#            |
+#            v
+#   [ Build ]             <-- automatic
+#            |
+#            v
+#   [ Rotate & Store ]    <-- automatic  (New -> Old1 -> Old2, commit new zip)
+#            |
+#            v
+#   [ Stage ]             <-- automatic  (unzip + validate; PRINTS artifact name)
+#            |
+#            v
+#   [ Deploy RC ]         <-- WAITS FOR APPROVAL
+#            |
+#            v
+#   [ Cluster01 ] [ Cluster02 ] [ Cluster03 ]   <-- each WAITS FOR APPROVAL
+#
+# Approval is enforced by GitHub Environments (Settings > Environments):
+#   Staging   -> no required reviewers  (auto)
+#   RC        -> required reviewers      (approval)
+#   Cluster01/02/03 -> required reviewers (approval)
+#
+# NOTE on branches: Admin lives on S_21_P3, PMSCore/Security on
+# S_21_P2, so both branches are watched below. On push we detect the
+# service from which src/<Service>/ folder changed. A push that
+# changes ONLY config/patch.config can't be mapped to one service --
+# use the manual "Run workflow" button and pick the service instead.
+###############################################################
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Service to build & release"
+        type: choice
+        required: true
+        default: Admin
+        options:
+          - Admin
+          - PMSCore
+          - Security
+
+  push:
+    branches:
+      - S_21_P3
+      - S_21_P2
+    paths:
+      - 'src/AdminAPI/**'
+      - 'src/PMSCoreAPI/**'
+      - 'src/SecurityAPI/**'
+
+permissions:
+  contents: write        # needed to commit/push the rotated artifact
+
+env:
+  CONFIG_FILE: config/patch.config
+
+jobs:
+
+###############################################################
+# 1. Setup -- detect the service and read patch.config
+###############################################################
+  setup:
+    name: Detect Service & Read Config
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    outputs:
+      service: ${{ steps.detect.outputs.service }}   # Admin | PMSCore | Security  (also the zip prefix)
+      dir: ${{ steps.detect.outputs.dir }}           # AdminAPI | PMSCoreAPI | SecurityAPI
+      sprint: ${{ steps.config.outputs.sprint }}
+      patch: ${{ steps.config.outputs.patch }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: detect
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SERVICE="${{ inputs.service }}"
+          else
+            BEFORE="${{ github.event.before }}"
+            AFTER="${{ github.event.after }}"
+            if [[ "$BEFORE" =~ ^0+$ ]]; then
+              CHANGED=$(git show --name-only --pretty="" "$AFTER" \
+                | grep -E '^src/(AdminAPI|PMSCoreAPI|SecurityAPI)/' | head -1) || true
+            else
+              CHANGED=$(git diff --name-only "$BEFORE" "$AFTER" \
+                | grep -E '^src/(AdminAPI|PMSCoreAPI|SecurityAPI)/' | head -1) || true
+            fi
+
+            case "$CHANGED" in
+              src/AdminAPI/*)     SERVICE="Admin" ;;
+              src/PMSCoreAPI/*)   SERVICE="PMSCore" ;;
+              src/SecurityAPI/*)  SERVICE="Security" ;;
+              *)
+                echo "Could not determine which service changed."
+                echo "Use the 'Run workflow' button and select a service."
+                exit 1
+                ;;
+            esac
+          fi
+
+          case "$SERVICE" in
+            Admin)    DIR="AdminAPI" ;;
+            PMSCore)  DIR="PMSCoreAPI" ;;
+            Security) DIR="SecurityAPI" ;;
+          esac
+
+          echo "Service : $SERVICE"
+          echo "Dir     : $DIR"
+          echo "service=$SERVICE" >> $GITHUB_OUTPUT
+          echo "dir=$DIR"         >> $GITHUB_OUTPUT
+
+      - id: config
+        shell: bash
+        run: |
+          echo "sprint=$(grep '^SPRINT=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+          echo "patch=$(grep '^PATCH=' $CONFIG_FILE | cut -d '=' -f2)" >> $GITHUB_OUTPUT
+
+###############################################################
+# 2. Build (dynamic per detected service)
+###############################################################
+  build:
+    name: Build - ${{ needs.setup.outputs.service }}
+    needs: setup
+    runs-on: ubuntu-latest
+
+    env:
+      DIR: ${{ needs.setup.outputs.dir }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore src/$DIR/$DIR.csproj
+
+      - name: Build
+        run: dotnet build src/$DIR/$DIR.csproj --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test src/$DIR/$DIR.csproj --no-build --verbosity normal
+
+      - name: Publish
+        run: dotnet publish src/$DIR/$DIR.csproj -c Release -o publish/$DIR
+
+      - name: Verify Publish Output
+        run: ls -R publish/$DIR
+
+      - name: Upload Publish Files
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-files
+          path: publish/${{ needs.setup.outputs.dir }}
+
+###############################################################
+# 3. Rotate & Store  (remove old, add new)
+###############################################################
+  artifact_management:
+    name: Rotate & Store - ${{ needs.setup.outputs.service }}
+    needs:
+      - setup
+      - build
+
+    concurrency:
+      group: artifact-${{ needs.setup.outputs.dir }}-${{ github.ref }}
+      cancel-in-progress: false
+
+    runs-on: ubuntu-latest
+
+    outputs:
+      artifact: ${{ steps.zip.outputs.artifact_name }}
+
+    env:
+      SERVICE: ${{ needs.setup.outputs.service }}
+      DIR: ${{ needs.setup.outputs.dir }}
+      SPRINT: ${{ needs.setup.outputs.sprint }}
+      PATCH: ${{ needs.setup.outputs.patch }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Download Publish Files
+        uses: actions/download-artifact@v4
+        with:
+          name: publish-files
+          path: publish/${{ needs.setup.outputs.dir }}
+
+      - name: Install Zip
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zip
+
+      - name: Ensure Artifact Folder Structure
+        shell: bash
+        run: |
+          mkdir -p artifacts/$DIR/New
+          mkdir -p artifacts/$DIR/Old1
+          mkdir -p artifacts/$DIR/Old2
+
+      - name: Configure Git
+        shell: bash
+        run: |
+          git config user.name "sam"
+          git config user.email "sam@github-actions.local"
+          git checkout ${GITHUB_REF_NAME}
+
+      - name: Sync With Remote
+        shell: bash
+        run: |
+          # Job-level concurrency (per service + ref) serializes this, so
+          # this is the latest state before we rotate/commit. No rebase after
+          # this point, so binary zip renames can never conflict.
+          git fetch origin ${GITHUB_REF_NAME}
+          git reset --hard origin/${GITHUB_REF_NAME}
+
+      - name: Capture Previous Commit Messages
+        shell: bash
+        run: |
+          NEW_MSG=$(git log -1 --format=%s -- artifacts/$DIR/New 2>/dev/null)
+          OLD1_MSG=$(git log -1 --format=%s -- artifacts/$DIR/Old1 2>/dev/null)
+          [ -z "$NEW_MSG" ] && NEW_MSG="No previous artifact"
+          [ -z "$OLD1_MSG" ] && OLD1_MSG="No previous artifact"
+          echo "NEW_MSG=$NEW_MSG" >> $GITHUB_ENV
+          echo "OLD1_MSG=$OLD1_MSG" >> $GITHUB_ENV
+
+      - name: Rotate Existing Artifacts
+        shell: bash
+        run: |
+          echo "Clearing Old2"
+          rm -rf artifacts/$DIR/Old2/*
+
+          echo "Moving Old1 -> Old2"
+          if [ "$(ls -A artifacts/$DIR/Old1 2>/dev/null)" ]; then
+            mv artifacts/$DIR/Old1/* artifacts/$DIR/Old2/
+          fi
+
+          echo "Moving New -> Old1"
+          if [ "$(ls -A artifacts/$DIR/New 2>/dev/null)" ]; then
+            mv artifacts/$DIR/New/* artifacts/$DIR/Old1/
+          fi
+
+      - name: Commit Old2 Rotation
+        shell: bash
+        run: |
+          git add artifacts/$DIR/Old2
+          if git diff --cached --quiet; then
+            echo "No Old2 changes."
+          else
+            git commit -m "Old2 <= ${OLD1_MSG}"
+          fi
+
+      - name: Commit Old1 Rotation
+        shell: bash
+        run: |
+          git add artifacts/$DIR/Old1
+          if git diff --cached --quiet; then
+            echo "No Old1 changes."
+          else
+            git commit -m "Old1 <= ${NEW_MSG}"
+          fi
+
+      - name: Create Latest Artifact
+        id: zip
+        shell: bash
+        run: |
+          TIMESTAMP=$(TZ=Asia/Kolkata date +"%Y%m%d_%H%M%S")
+          ARTIFACT_NAME="${SERVICE}_Sprint${SPRINT}_Patch${PATCH}_${TIMESTAMP}.zip"
+          echo "artifact_name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
+          zip -r artifacts/$DIR/New/${ARTIFACT_NAME} publish/$DIR
+
+      - name: Verify Artifact Structure
+        run: ls -R artifacts/$DIR
+
+      - name: Commit New Artifact
+        shell: bash
+        run: |
+          git add artifacts/$DIR/New
+          if git diff --cached --quiet; then
+            echo "No New artifact changes."
+            exit 0
+          fi
+          TIMESTAMP=$(TZ=Asia/Kolkata date +"%Y-%m-%d %H:%M:%S IST")
+          git commit -m "$DIR Artifact | Sprint ${SPRINT} | Patch ${PATCH} | ${TIMESTAMP}"
+
+      - name: Push Commits
+        shell: bash
+        run: |
+          for i in 1 2 3; do
+            if git push origin ${GITHUB_REF_NAME}; then
+              echo "Push Successful"
+              exit 0
+            fi
+            echo "Push rejected or failed. Fetching latest and retrying ($i)..."
+            git fetch origin ${GITHUB_REF_NAME}
+            sleep 2
+          done
+          echo "Push failed after 3 attempts."
+          exit 1
+
+      - name: Upload Release Zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReleaseZip
+          path: artifacts/${{ needs.setup.outputs.dir }}/New/${{ steps.zip.outputs.artifact_name }}
+          retention-days: 30
+          if-no-files-found: error
+
+###############################################################
+# 4. Stage  (AUTOMATIC) -- clearly shows which artifact is used
+###############################################################
+  stage:
+    name: Stage - ${{ needs.setup.outputs.service }}
+    needs:
+      - setup
+      - artifact_management
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: Staging
+
+    outputs:
+      service: ${{ needs.setup.outputs.service }}
+      dir: ${{ needs.setup.outputs.dir }}
+      sprint: ${{ needs.setup.outputs.sprint }}
+      patch: ${{ needs.setup.outputs.patch }}
+      artifact: ${{ needs.artifact_management.outputs.artifact }}
+
+    env:
+      ARTIFACT: ${{ needs.artifact_management.outputs.artifact }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Release Zip
+        uses: actions/download-artifact@v4
+        with:
+          name: ReleaseZip
+          path: incoming
+
+      - name: Prepare Package
+        shell: bash
+        run: |
+          mkdir -p staging
+          ZIP=$(ls -t incoming/*.zip | head -1)
+          echo "Using artifact: $(basename "$ZIP")"
+          unzip -o "$ZIP" -d staging
+          ls -R staging
+
+      - name: Validate Package
+        shell: bash
+        run: |
+          if [ -z "$(ls -A staging)" ]; then
+            echo "Staging package is empty."
+            exit 1
+          fi
+          echo "Package validated."
+
+      - name: Staging Summary
+        shell: bash
+        run: |
+          echo "========================================="
+          echo "STAGED AND READY"
+          echo "Service  : ${{ needs.setup.outputs.service }}"
+          echo "Sprint   : ${{ needs.setup.outputs.sprint }}"
+          echo "Patch    : ${{ needs.setup.outputs.patch }}"
+          echo "ARTIFACT IN USE : ${ARTIFACT}"
+          echo "Waiting for RC approval..."
+          echo "========================================="
+
+          # Also surface it in the run's summary tab
+          {
+            echo "### Staging - ${{ needs.setup.outputs.service }}"
+            echo ""
+            echo "**Artifact in use:** \`${ARTIFACT}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Staged Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: StagedPackage
+          path: staging
+          retention-days: 30
+          if-no-files-found: error
+
+###############################################################
+# 5. Deploy RC  (WAITS FOR APPROVAL)
+###############################################################
+  deploy_rc:
+    name: Deploy RC - ${{ needs.stage.outputs.service }}
+    needs: stage
+    runs-on: ubuntu-latest
+
+    environment:
+      name: RC
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Staged Package
+        uses: actions/download-artifact@v4
+        with:
+          name: StagedPackage
+          path: staging
+      - name: Deploy RC
+        run: |
+          echo "Deploying artifact: ${{ needs.stage.outputs.artifact }}"
+          mkdir -p "environments/RC/${{ needs.stage.outputs.dir }}"
+          rm -rf "environments/RC/${{ needs.stage.outputs.dir }}"/*
+          cp -R staging/. "environments/RC/${{ needs.stage.outputs.dir }}/"
+          echo "${{ needs.stage.outputs.service }} deployed to RC"
+          ls -R "environments/RC/${{ needs.stage.outputs.dir }}"
+
+###############################################################
+# 6. Cluster01  (WAITS FOR APPROVAL)
+###############################################################
+  deploy_cluster01:
+    name: Deploy Cluster01 - ${{ needs.stage.outputs.service }}
+    needs:
+      - stage
+      - deploy_rc
+    runs-on: ubuntu-latest
+
+    environment:
+      name: Cluster01
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Staged Package
+        uses: actions/download-artifact@v4
+        with:
+          name: StagedPackage
+          path: staging
+      - name: Deploy Cluster01
+        run: |
+          echo "Deploying artifact: ${{ needs.stage.outputs.artifact }}"
+          mkdir -p "environments/Cluster01/${{ needs.stage.outputs.dir }}"
+          rm -rf "environments/Cluster01/${{ needs.stage.outputs.dir }}"/*
+          cp -R staging/. "environments/Cluster01/${{ needs.stage.outputs.dir }}/"
+          echo "${{ needs.stage.outputs.service }} deployed to Cluster01"
+
+###############################################################
+# 7. Cluster02  (WAITS FOR APPROVAL)
+###############################################################
+  deploy_cluster02:
+    name: Deploy Cluster02 - ${{ needs.stage.outputs.service }}
+    needs:
+      - stage
+      - deploy_rc
+    runs-on: ubuntu-latest
+
+    environment:
+      name: Cluster02
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Staged Package
+        uses: actions/download-artifact@v4
+        with:
+          name: StagedPackage
+          path: staging
+      - name: Deploy Cluster02
+        run: |
+          echo "Deploying artifact: ${{ needs.stage.outputs.artifact }}"
+          mkdir -p "environments/Cluster02/${{ needs.stage.outputs.dir }}"
+          rm -rf "environments/Cluster02/${{ needs.stage.outputs.dir }}"/*
+          cp -R staging/. "environments/Cluster02/${{ needs.stage.outputs.dir }}/"
+          echo "${{ needs.stage.outputs.service }} deployed to Cluster02"
+
+###############################################################
+# 8. Cluster03  (WAITS FOR APPROVAL)
+###############################################################
+  deploy_cluster03:
+    name: Deploy Cluster03 - ${{ needs.stage.outputs.service }}
+    needs:
+      - stage
+      - deploy_rc
+    runs-on: ubuntu-latest
+
+    environment:
+      name: Cluster03
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Staged Package
+        uses: actions/download-artifact@v4
+        with:
+          name: StagedPackage
+          path: staging
+      - name: Deploy Cluster03
+        run: |
+          echo "Deploying artifact: ${{ needs.stage.outputs.artifact }}"
+          mkdir -p "environments/Cluster03/${{ needs.stage.outputs.dir }}"
+          rm -rf "environments/Cluster03/${{ needs.stage.outputs.dir }}"/*
+          cp -R staging/. "environments/Cluster03/${{ needs.stage.outputs.dir }}/"
+          echo "${{ needs.stage.outputs.service }} deployed to Cluster03"
+
+###############################################################
+# 9. Summary
+###############################################################
+  summary:
+    name: Release Summary
+    needs:
+      - stage
+      - deploy_rc
+      - deploy_cluster01
+      - deploy_cluster02
+      - deploy_cluster03
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Summary
+        run: |
+          echo "========================================="
+          echo "Release Summary"
+          echo "Trigger   : ${{ github.event_name }}"
+          echo "Service   : ${{ needs.stage.outputs.service }}"
+          echo "Sprint    : ${{ needs.stage.outputs.sprint }}"
+          echo "Patch     : ${{ needs.stage.outputs.patch }}"
+          echo "Artifact  : ${{ needs.stage.outputs.artifact }}"
+          echo ""
+          echo "Stage     : ${{ needs.stage.result }}"
+          echo "RC        : ${{ needs.deploy_rc.result }}"
+          echo "Cluster01 : ${{ needs.deploy_cluster01.result }}"
+          echo "Cluster02 : ${{ needs.deploy_cluster02.result }}"
+          echo "Cluster03 : ${{ needs.deploy_cluster03.result }}"
+          echo "========================================="
