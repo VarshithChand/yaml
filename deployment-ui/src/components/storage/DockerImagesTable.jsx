@@ -24,6 +24,8 @@ export default function DockerImagesTable({ images = [], owner }) {
 
             ) : (
 
+                <div className="table-scroll">
+
                 <table className="table">
 
                     <thead>
@@ -78,6 +80,8 @@ export default function DockerImagesTable({ images = [], owner }) {
                     </tbody>
 
                 </table>
+
+                </div>
 
             )}
 

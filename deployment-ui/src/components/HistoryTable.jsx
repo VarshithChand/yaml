@@ -12,6 +12,8 @@ export default function HistoryTable({ runs = [] }) {
 
             </h2>
 
+            <div className="table-scroll">
+
             <table className="table">
 
                 <thead>
@@ -65,6 +67,8 @@ export default function HistoryTable({ runs = [] }) {
                 </tbody>
 
             </table>
+
+            </div>
 
         </div>
 

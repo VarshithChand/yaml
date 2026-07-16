@@ -46,6 +46,8 @@ export default function DeploymentSummary({
 
             </h2>
 
+            <div className="table-scroll">
+
             <table className="table">
 
                 <tbody>
@@ -107,6 +109,8 @@ export default function DeploymentSummary({
                 </tbody>
 
             </table>
+
+            </div>
 
         </div>
 

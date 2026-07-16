@@ -21,6 +21,8 @@ export default function ArtifactsTable({ artifacts = [], owner, repository }) {
 
             ) : (
 
+                <div className="table-scroll">
+
                 <table className="table">
 
                     <thead>
@@ -74,6 +76,8 @@ export default function ArtifactsTable({ artifacts = [], owner, repository }) {
                     </tbody>
 
                 </table>
+
+                </div>
 
             )}
 

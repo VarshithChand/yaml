@@ -44,6 +44,8 @@ export default function RecentDeployments() {
 
                     : (
 
+                        <div className="table-scroll">
+
                         <table className="table">
 
                             <thead>
@@ -84,6 +86,8 @@ export default function RecentDeployments() {
                             </tbody>
 
                         </table>
+
+                        </div>
 
                     )
 
