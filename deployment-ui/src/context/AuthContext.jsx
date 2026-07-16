@@ -13,6 +13,7 @@ export default function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [oauthConfigured, setOauthConfigured] = useState(false);
+    const [githubTokenConfigured, setGithubTokenConfigured] = useState(false);
 
     const refresh = useCallback(async () => {
 
@@ -23,6 +24,9 @@ export default function AuthProvider({ children }) {
 
     }, []);
 
+    // Covers both GitHub OAuth login and the Personal Access Token the
+    // backend uses to call the GitHub API — pages that gate an action behind
+    // "is a PAT configured" (e.g. triggering a deployment) read that here too.
     const refreshOauthStatus = useCallback(async () => {
 
         try {
@@ -32,6 +36,8 @@ export default function AuthProvider({ children }) {
             setOauthConfigured(
                 !!settings.gitHubOAuthClientId && !!settings.gitHubOAuthClientSecretConfigured
             );
+
+            setGithubTokenConfigured(!!settings.gitHubTokenConfigured);
 
         }
         catch (err) {
@@ -88,7 +94,7 @@ export default function AuthProvider({ children }) {
 
     return (
 
-        <AuthContext.Provider value={{ user, loading, login, logout, refresh, oauthConfigured, refreshOauthStatus }}>
+        <AuthContext.Provider value={{ user, loading, login, logout, refresh, oauthConfigured, githubTokenConfigured, refreshOauthStatus }}>
 
             {children}
 

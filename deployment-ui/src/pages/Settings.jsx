@@ -184,6 +184,7 @@ export default function Settings() {
             setGithubToken("");
             toast.show(`GitHub settings saved: ${parsed.owner}/${parsed.repository}`, "success");
             load();
+            refreshOauthStatus();
 
         }
         catch (err) {
@@ -305,6 +306,7 @@ export default function Settings() {
 
             if (section === "github") {
                 setGithubToken("");
+                refreshOauthStatus();
             }
 
             if (section === "docker") {

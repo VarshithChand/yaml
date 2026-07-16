@@ -10,6 +10,8 @@ import DeploymentSummary from "./deployment/DeploymentSummary";
 import DeploymentProgress from "./deployment/DeploymentProgress";
 
 import useToast from "../hooks/useToast";
+import useAuth from "../hooks/useAuth";
+import useNavigation from "../hooks/useNavigation";
 
 function formatInputLabel(name) {
 
@@ -55,6 +57,8 @@ export default function DeploymentForm({
     const [artifactSearch, setArtifactSearch] = useState("");
 
     const toast = useToast();
+    const { githubTokenConfigured } = useAuth();
+    const { setTab } = useNavigation();
 
     // CI mode never shows deploy inputs; CD and the combined CI+CD mode both do,
     // since a combined pipeline still declares whatever deploy inputs it needs.
@@ -213,6 +217,28 @@ export default function DeploymentForm({
     /* -----------------------------
        Deploy
     ------------------------------*/
+
+    // Browsing (viewing repos, artifacts, history) works anonymously, but
+    // GitHub always requires an authenticated request to trigger a workflow —
+    // catching that here sends people straight to Settings instead of letting
+    // them fill out the whole form and only find out from a failed request.
+    function handleDeployClick() {
+
+        if (!githubTokenConfigured) {
+
+            toast.show(
+                "A GitHub Personal Access Token is required to trigger deployments. Add one in Settings.",
+                "error"
+            );
+
+            setTab("settings");
+            return;
+
+        }
+
+        setConfirm(true);
+
+    }
 
     const handleDeploy = async () => {
 
@@ -534,6 +560,20 @@ export default function DeploymentForm({
 
                 </h2>
 
+                {!githubTokenConfigured && (
+
+                    <div className="error-message">
+
+                        You're browsing in public view. Triggering a deployment needs a GitHub
+                        Personal Access Token —{" "}
+                        <a href="#" onClick={(e) => { e.preventDefault(); setTab("settings"); }}>
+                            add one in Settings
+                        </a>.
+
+                    </div>
+
+                )}
+
                 {/* ==========================
                     CI / CD Mode
                 =========================== */}
@@ -678,7 +718,7 @@ export default function DeploymentForm({
 
                     disabled={deploying}
 
-                    onClick={() => setConfirm(true)}
+                    onClick={handleDeployClick}
 
                 >
 
