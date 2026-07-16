@@ -54,8 +54,6 @@ export default function DeploymentForm({
 
     const [artifactSearch, setArtifactSearch] = useState("");
 
-    const [workflowSearch, setWorkflowSearch] = useState("");
-
     const toast = useToast();
 
     // CI mode never shows deploy inputs; CD and the combined CI+CD mode both do,
@@ -119,19 +117,10 @@ export default function DeploymentForm({
 
     const modeWorkflows = workflows.filter((item) => classifyWorkflow(item) === mode);
 
-    const filteredWorkflows = modeWorkflows.filter(workflow =>
-
-        workflow.name
-            .toLowerCase()
-            .includes(workflowSearch.toLowerCase())
-
-    );
-
     function handleModeChange(nextMode) {
 
         setMode(nextMode);
         setWorkflow("");
-        setWorkflowSearch("");
 
     }
 
@@ -629,71 +618,15 @@ export default function DeploymentForm({
 
                     </p>
 
-                    <SearchBox
+                    <ComboBox
 
-                        placeholder="Search Workflow..."
-
-                        value={workflowSearch}
-
-                        onChange={setWorkflowSearch}
+                        options={modeWorkflows.map((item) => ({ value: item.path, label: item.name }))}
+                        value={workflow}
+                        onChange={setWorkflow}
+                        placeholder="Search or select a workflow..."
+                        emptyLabel={`No ${mode} workflow found`}
 
                     />
-
-                    <select
-
-                        className="form-control"
-
-                        value={workflow}
-
-                        onChange={(e) => setWorkflow(e.target.value)}
-
-                    >
-
-                        <option value="">
-
-                            Select Workflow
-
-                        </option>
-
-                        {
-
-                            filteredWorkflows.length === 0 ?
-
-                                (
-
-                                    <option disabled>
-
-                                        No {mode} Workflow Found
-
-                                    </option>
-
-                                )
-
-                                :
-
-                                (
-
-                                    filteredWorkflows.map((item) => (
-
-                                        <option
-
-                                            key={item.id}
-
-                                            value={item.path}
-
-                                        >
-
-                                            {item.name}
-
-                                        </option>
-
-                                    ))
-
-                                )
-
-                        }
-
-                    </select>
 
                 </div>
 
