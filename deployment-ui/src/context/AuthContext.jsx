@@ -2,6 +2,7 @@ import { createContext, useCallback, useEffect, useState } from "react";
 
 import { getMe, logout as logoutRequest } from "../services/authService";
 import { getSettings } from "../services/settingsService";
+import { getTokenOwner } from "../services/githubService";
 import useToast from "../hooks/useToast";
 
 export const AuthContext = createContext();
@@ -14,6 +15,7 @@ export default function AuthProvider({ children }) {
     const [loading, setLoading] = useState(true);
     const [oauthConfigured, setOauthConfigured] = useState(false);
     const [githubTokenConfigured, setGithubTokenConfigured] = useState(false);
+    const [tokenOwner, setTokenOwner] = useState(null);
 
     const refresh = useCallback(async () => {
 
@@ -37,7 +39,25 @@ export default function AuthProvider({ children }) {
                 !!settings.gitHubOAuthClientId && !!settings.gitHubOAuthClientSecretConfigured
             );
 
-            setGithubTokenConfigured(!!settings.gitHubTokenConfigured);
+            const hasToken = !!settings.gitHubTokenConfigured;
+            setGithubTokenConfigured(hasToken);
+
+            if (hasToken) {
+
+                // Resolves who the token belongs to and whether that account
+                // has admin access to the repo — the same permission GitHub
+                // itself checks to let someone approve a protected-environment
+                // deployment. Pages like Approvals use this to hide themselves
+                // entirely rather than just showing a "no access" message.
+                const owner = await getTokenOwner();
+                setTokenOwner(owner.data);
+
+            }
+            else {
+
+                setTokenOwner(null);
+
+            }
 
         }
         catch (err) {
@@ -94,7 +114,7 @@ export default function AuthProvider({ children }) {
 
     return (
 
-        <AuthContext.Provider value={{ user, loading, login, logout, refresh, oauthConfigured, githubTokenConfigured, refreshOauthStatus }}>
+        <AuthContext.Provider value={{ user, loading, login, logout, refresh, oauthConfigured, githubTokenConfigured, tokenOwner, canApproveReleases: !!tokenOwner?.canApprove, refreshOauthStatus }}>
 
             {children}
 

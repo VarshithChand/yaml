@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import useTheme from "../../hooks/useTheme";
 import useAuth from "../../hooks/useAuth";
 import useNavigation from "../../hooks/useNavigation";
 import usePolling from "../../hooks/usePolling";
 import Logo from "../common/Logo";
-import { getRateLimit, getTokenOwner } from "../../services/githubService";
+import { getRateLimit } from "../../services/githubService";
 
 const TABS = [
     { key: "dashboard", label: "Dashboard" },
@@ -27,12 +27,16 @@ const TABS = [
 export default function TopBar() {
 
     const { theme, toggleTheme } = useTheme();
-    const { user, loading, login, logout, oauthConfigured, githubTokenConfigured } = useAuth();
+    const { user, loading, login, logout, oauthConfigured, tokenOwner, canApproveReleases } = useAuth();
     const { tab, setTab } = useNavigation();
 
     const [rateLimit, setRateLimit] = useState(null);
-    const [tokenOwner, setTokenOwner] = useState(null);
     const [menuOpen, setMenuOpen] = useState(false);
+
+    // The Approvals tab only makes sense for someone whose token can
+    // actually approve a deployment (repo-admin access) — everyone else
+    // never sees it, rather than seeing it and hitting a "no access" wall.
+    const visibleTabs = TABS.filter((t) => t.key !== "approvals" || canApproveReleases);
 
     async function loadRateLimit() {
 
@@ -54,31 +58,6 @@ export default function TopBar() {
     // is free — this is what lets "Public view" show a live remaining count.
     // usePolling fires once immediately on mount, then on the interval.
     usePolling(loadRateLimit, 30000);
-
-    // Who the saved Personal Access Token belongs to — shown in place of
-    // "Set up GitHub Login" once a token is configured. githubTokenConfigured
-    // resolves asynchronously after mount, so re-fetch as soon as it flips
-    // rather than only checking once at mount time.
-    useEffect(() => {
-
-        if (!githubTokenConfigured) {
-            setTokenOwner(null);
-            return;
-        }
-
-        let cancelled = false;
-
-        getTokenOwner()
-            .then((response) => {
-                if (!cancelled) setTokenOwner(response.data);
-            })
-            .catch((err) => console.error(err));
-
-        return () => {
-            cancelled = true;
-        };
-
-    }, [githubTokenConfigured]);
 
     function handleTabClick(key) {
 
@@ -109,7 +88,7 @@ export default function TopBar() {
 
                 <nav className="app-nav">
 
-                    {TABS.map((t) => (
+                    {visibleTabs.map((t) => (
 
                         <button
                             key={t.key}

@@ -11,7 +11,7 @@ import StatusBadge from "../components/StatusBadge";
 
 export default function Approvals() {
 
-    const { githubTokenConfigured } = useAuth();
+    const { githubTokenConfigured, tokenOwner, canApproveReleases } = useAuth();
     const { setTab } = useNavigation();
     const toast = useToast();
 
@@ -23,7 +23,7 @@ export default function Approvals() {
 
     async function load() {
 
-        if (!githubTokenConfigured) {
+        if (!canApproveReleases) {
             setLoading(false);
             return;
         }
@@ -57,17 +57,32 @@ export default function Approvals() {
     // any faster than that.
     usePolling(load, 20000);
 
-    // githubTokenConfigured resolves asynchronously after mount (it starts
-    // false until AuthContext's settings fetch completes). Re-run load()
-    // the moment it flips instead of waiting for the next 20s poll tick.
+    // canApproveReleases resolves asynchronously after mount (it starts
+    // false until AuthContext has fetched settings and, if a token is
+    // configured, the token owner's repo permissions). Re-run load() the
+    // moment it flips instead of waiting for the next 20s poll tick.
     useEffect(() => {
 
-        if (githubTokenConfigured) {
+        if (canApproveReleases) {
             load();
         }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [githubTokenConfigured]);
+    }, [canApproveReleases]);
+
+    // A token without approve rights shouldn't land here at all — the nav
+    // tab is already hidden for that case (see TopBar), but this covers a
+    // bookmarked/typed URL. Wait until tokenOwner has actually resolved
+    // (not just "no token yet") before redirecting, so we don't bounce
+    // someone away during the brief window before AuthContext settles.
+    useEffect(() => {
+
+        if (githubTokenConfigured && tokenOwner && !canApproveReleases) {
+            setTab("dashboard");
+        }
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [githubTokenConfigured, tokenOwner, canApproveReleases]);
 
     function toggleEnv(runId, envId) {
 
@@ -134,7 +149,12 @@ export default function Approvals() {
 
     }
 
-    if (loading) {
+    // Still resolving whether this token can approve at all (or the
+    // redirect-away effect above is about to fire) — show a spinner rather
+    // than flashing the "add a token" message at someone who already has one.
+    const resolvingAccess = githubTokenConfigured && !tokenOwner;
+
+    if (loading || resolvingAccess || (githubTokenConfigured && !canApproveReleases)) {
         return <LoadingSpinner />;
     }
 

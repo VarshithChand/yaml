@@ -129,18 +129,30 @@ public class GitHubApiService
         if (!_auth.HasToken)
             return Task.FromResult(new TokenOwnerDto { Configured = false });
 
-        return GetCachedAsync("token-owner", async () =>
+        return GetCachedAsync($"token-owner:{_auth.Owner}/{_auth.Repository}", async () =>
         {
             var client = _auth.CreateClient();
 
-            var json = await HttpClientHelper.GetAsync(client, "https://api.github.com/user");
-            var user = JObject.Parse(json);
+            var userJson = await HttpClientHelper.GetAsync(client, "https://api.github.com/user");
+            var user = JObject.Parse(userJson);
+
+            // The repo endpoint includes a "permissions" block scoped to the
+            // authenticated token when the token can see the repo at all.
+            // "admin" is the same bit GitHub itself checks to let someone
+            // approve a protected-environment deployment they weren't
+            // explicitly named a reviewer on.
+            var repoJson = await HttpClientHelper.GetAsync(
+                client, $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}");
+
+            var repo = JObject.Parse(repoJson);
+            var canApprove = (bool?)repo["permissions"]?["admin"] ?? false;
 
             return new TokenOwnerDto
             {
                 Configured = true,
                 Login = user["login"]?.ToString() ?? string.Empty,
-                AvatarUrl = user["avatar_url"]?.ToString() ?? string.Empty
+                AvatarUrl = user["avatar_url"]?.ToString() ?? string.Empty,
+                CanApprove = canApprove
             };
         });
     }
