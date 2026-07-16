@@ -37,6 +37,12 @@ export default function Settings() {
     const [repoPreview, setRepoPreview] = useState(null);
     const [repoPreviewLoading, setRepoPreviewLoading] = useState(false);
 
+    // Drives the highlighted "Generate a token" link below — GitHub's 60/hour
+    // anonymous limit is the single most common reason someone lands here.
+    const isRateLimited = !!(
+        repoPreview && !repoPreview.found && /rate limit/i.test(repoPreview.error || "")
+    );
+
     const [dockerRegistry, setDockerRegistry] = useState("");
     const [dockerUsername, setDockerUsername] = useState("");
     const [dockerPassword, setDockerPassword] = useState("");
@@ -437,6 +443,16 @@ export default function Settings() {
                         onChange={(e) => setGithubToken(e.target.value)}
                         disabled={githubTokenConfigured}
                     />
+                    <a
+                        href="https://github.com/settings/tokens"
+                        target="_blank"
+                        rel="noreferrer"
+                        className={`token-help-link ${isRateLimited ? "token-help-link-alert" : ""}`}
+                    >
+                        {isRateLimited
+                            ? "Rate limit exceeded — generate a token on GitHub →"
+                            : "Generate a token on GitHub →"}
+                    </a>
                 </div>
 
                 <div className="button-row">

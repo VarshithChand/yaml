@@ -671,6 +671,47 @@ textarea{
 
 }
 
+.token-help-link{
+
+    display:inline-block;
+
+    margin-top:6px;
+
+    font-size:13px;
+
+    color:var(--heading-accent);
+
+    text-decoration:none;
+
+}
+
+.token-help-link:hover{
+
+    text-decoration:underline;
+
+}
+
+.token-help-link-alert{
+
+    color:white;
+
+    background:var(--viz-critical);
+
+    padding:4px 10px;
+
+    border-radius:6px;
+
+    font-weight:600;
+
+    animation:token-alert-pulse 1.6s ease-in-out infinite;
+
+}
+
+@keyframes token-alert-pulse{
+    0%, 100%{ opacity:1; }
+    50%{ opacity:.7; }
+}
+
 .repo-preview{
 
     margin-top:10px;
