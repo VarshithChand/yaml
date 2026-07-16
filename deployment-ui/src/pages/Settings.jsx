@@ -189,8 +189,13 @@ export default function Settings() {
 
             setGithubToken("");
             toast.show(`GitHub settings saved: ${parsed.owner}/${parsed.repository}`, "success");
-            load();
-            refreshOauthStatus();
+
+            // Full reload, not just re-fetching this page's own state —
+            // Dashboard, Deploy, History, etc. already loaded data for
+            // whatever repo was configured before this save and won't know
+            // to refetch on their own, so a page reload is what actually
+            // gets every page showing the newly configured repo's details.
+            setTimeout(() => window.location.reload(), 900);
 
         }
         catch (err) {
