@@ -116,8 +116,11 @@ public class GitHubApiService
         {
             var client = _auth.CreateClient();
 
+            // GitHub defaults list endpoints to 30 results per page — without
+            // per_page=100, repos with more branches than that would silently
+            // drop the rest from the Deploy page's branch picker.
             var url =
-                $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/branches";
+                $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/branches?per_page=100";
 
             var json = await HttpClientHelper.GetAsync(client, url);
 
@@ -139,7 +142,7 @@ public class GitHubApiService
             var client = _auth.CreateClient();
 
             var url =
-                $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/actions/artifacts";
+                $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/actions/artifacts?per_page=100";
 
             var json = await HttpClientHelper.GetAsync(client, url);
 
@@ -250,7 +253,7 @@ public class GitHubApiService
             var client = _auth.CreateClient();
 
             var url =
-                $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/actions/workflows";
+                $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/actions/workflows?per_page=100";
 
             return await HttpClientHelper.GetAsync(client, url);
         });
