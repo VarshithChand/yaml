@@ -180,25 +180,52 @@ public class GitHubApiService
             if (artifacts == null)
                 return new List<ArtifactDto>();
 
-            return artifacts.Select(x => new ArtifactDto
+            // publish-files-* is an internal hand-off artifact used only within
+            // a single workflow run (the build job uploads it, the rotate/store
+            // job downloads it a few steps later) — it was never meant to be a
+            // user-facing deliverable, so it's excluded here rather than
+            // cluttering the list/count alongside the real *-Latest/ReleaseZip/
+            // StagedPackage artifacts people actually care about.
+            var runsById = (await GetWorkflowRuns())
+                .ToDictionary(r => r.Id, r => r);
+
+            return artifacts
+                .Where(x => !(x["name"]?.ToString() ?? "").StartsWith("publish-files", StringComparison.OrdinalIgnoreCase))
+                .Select(x =>
                 {
-                    Id = (long?)x["id"] ?? 0,
+                    var runId = (long?)x["workflow_run"]?["id"] ?? 0;
+                    runsById.TryGetValue(runId, out var run);
 
-                    Name = x["name"]?.ToString() ?? string.Empty,
+                    return new ArtifactDto
+                    {
+                        Id = (long?)x["id"] ?? 0,
 
-                    Size = (long?)x["size_in_bytes"] ?? 0,
+                        Name = x["name"]?.ToString() ?? string.Empty,
 
-                    Expired = (bool?)x["expired"] ?? false,
+                        Size = (long?)x["size_in_bytes"] ?? 0,
 
-                    CreatedAt = DateTime.TryParse(
-                        x["created_at"]?.ToString(),
-                        out var createdAt)
-                             ? createdAt
-                             : DateTime.MinValue,
+                        Expired = (bool?)x["expired"] ?? false,
 
-                    DownloadUrl = x["archive_download_url"]?.ToString() ?? string.Empty
+                        CreatedAt = DateTime.TryParse(
+                            x["created_at"]?.ToString(),
+                            out var createdAt)
+                                 ? createdAt
+                                 : DateTime.MinValue,
 
-                }).ToList();
+                        DownloadUrl = x["archive_download_url"]?.ToString() ?? string.Empty,
+
+                        Branch = x["workflow_run"]?["head_branch"]?.ToString() ?? string.Empty,
+
+                        CommitSha = x["workflow_run"]?["head_sha"]?.ToString() ?? string.Empty,
+
+                        CommitMessage = run?.CommitMessage ?? string.Empty,
+
+                        WorkflowRunUrl = runId > 0
+                            ? $"https://github.com/{_auth.Owner}/{_auth.Repository}/actions/runs/{runId}"
+                            : string.Empty
+                    };
+                })
+                .ToList();
         });
 
     // GitHub always requires an authenticated request to download an artifact's
@@ -434,6 +461,8 @@ public class GitHubApiService
             x["created_at"]?.ToString(),
             out var createdAt)
                  ? createdAt
-                 : DateTime.MinValue
+                 : DateTime.MinValue,
+
+        CommitMessage = x["head_commit"]?["message"]?.ToString() ?? string.Empty
     };
 }

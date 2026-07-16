@@ -970,6 +970,38 @@ textarea{
 
 }
 
+.table-row-clickable{
+
+    cursor:pointer;
+
+}
+
+.table-row-details{
+
+    background:var(--table-row-hover);
+
+}
+
+.table-row-details:hover{
+
+    background:var(--table-row-hover);
+
+}
+
+.table-row-details td{
+
+    padding:14px 20px;
+
+}
+
+.table-row-details .info-row{
+
+    padding:6px 0;
+
+    border-bottom:none;
+
+}
+
 /* ==========================================
    BADGES
 ========================================== */

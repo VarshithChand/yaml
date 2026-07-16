@@ -13,4 +13,12 @@ public class ArtifactDto
     public DateTime CreatedAt { get; set; }
 
     public string DownloadUrl { get; set; } = string.Empty;
+
+    public string Branch { get; set; } = string.Empty;
+
+    public string CommitSha { get; set; } = string.Empty;
+
+    public string CommitMessage { get; set; } = string.Empty;
+
+    public string WorkflowRunUrl { get; set; } = string.Empty;
 }

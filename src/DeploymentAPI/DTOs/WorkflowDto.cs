@@ -15,4 +15,6 @@ public class WorkflowDto
     public string TriggeredBy { get; set; } = string.Empty;
 
     public DateTime CreatedAt { get; set; }
+
+    public string CommitMessage { get; set; } = string.Empty;
 }

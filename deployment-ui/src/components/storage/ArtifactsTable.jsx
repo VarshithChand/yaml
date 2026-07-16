@@ -1,3 +1,5 @@
+import { Fragment, useState } from "react";
+
 import formatBytes from "../../utils/formatBytes";
 import useAuth from "../../hooks/useAuth";
 import useNavigation from "../../hooks/useNavigation";
@@ -8,6 +10,8 @@ export default function ArtifactsTable({ artifacts = [], owner, repository, onDe
     const { githubTokenConfigured } = useAuth();
     const { setTab } = useNavigation();
     const toast = useToast();
+
+    const [expandedId, setExpandedId] = useState(null);
 
     function handleDeleteClick(artifact) {
 
@@ -27,6 +31,12 @@ export default function ArtifactsTable({ artifacts = [], owner, repository, onDe
 
     }
 
+    function toggleExpanded(id) {
+
+        setExpandedId((current) => (current === id ? null : id));
+
+    }
+
     return (
 
         <div className="card">
@@ -37,7 +47,7 @@ export default function ArtifactsTable({ artifacts = [], owner, repository, onDe
 
             <p className="empty-state" style={{ padding: "0 0 15px", textAlign: "left" }}>
                 Build outputs uploaded by GitHub Actions runs, stored under{" "}
-                <strong>{owner}/{repository}</strong>.
+                <strong>{owner}/{repository}</strong>. Click a row for the commit it was built from.
             </p>
 
             {artifacts.length === 0 ? (
@@ -67,7 +77,12 @@ export default function ArtifactsTable({ artifacts = [], owner, repository, onDe
 
                         {artifacts.map((artifact) => (
 
-                            <tr key={artifact.id}>
+                            <Fragment key={artifact.id}>
+
+                            <tr
+                                className="table-row-clickable"
+                                onClick={() => toggleExpanded(artifact.id)}
+                            >
 
                                 <td>{artifact.name}</td>
 
@@ -81,7 +96,7 @@ export default function ArtifactsTable({ artifacts = [], owner, repository, onDe
 
                                 <td>{new Date(artifact.createdAt).toLocaleString()}</td>
 
-                                <td>
+                                <td onClick={(e) => e.stopPropagation()}>
                                     {artifact.expired ? (
                                         <span className="empty-state">—</span>
                                     ) : (
@@ -95,7 +110,7 @@ export default function ArtifactsTable({ artifacts = [], owner, repository, onDe
                                     )}
                                 </td>
 
-                                <td>
+                                <td onClick={(e) => e.stopPropagation()}>
                                     <button
                                         className="btn btn-danger"
                                         style={{ padding: "6px 14px", fontSize: "13px" }}
@@ -107,6 +122,50 @@ export default function ArtifactsTable({ artifacts = [], owner, repository, onDe
                                 </td>
 
                             </tr>
+
+                            {expandedId === artifact.id && (
+
+                                <tr className="table-row-details">
+
+                                    <td colSpan={6}>
+
+                                        <div className="info-row">
+                                            <span>Branch</span>
+                                            <strong>{artifact.branch || "—"}</strong>
+                                        </div>
+
+                                        <div className="info-row">
+                                            <span>Commit</span>
+                                            <strong>
+                                                {artifact.commitSha ? artifact.commitSha.slice(0, 7) : "—"}
+                                            </strong>
+                                        </div>
+
+                                        <div className="info-row">
+                                            <span>Commit message</span>
+                                            <strong>{artifact.commitMessage || "Not available"}</strong>
+                                        </div>
+
+                                        {artifact.workflowRunUrl && (
+
+                                            <a
+                                                href={artifact.workflowRunUrl}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="token-help-link"
+                                            >
+                                                View this run on GitHub →
+                                            </a>
+
+                                        )}
+
+                                    </td>
+
+                                </tr>
+
+                            )}
+
+                            </Fragment>
 
                         ))}
 
