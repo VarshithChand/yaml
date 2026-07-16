@@ -64,7 +64,7 @@ public class DeploymentService
             return new DeployResultDto
             {
                 Success = false,
-                Message = await response.Content.ReadAsStringAsync()
+                Message = await HttpClientHelper.BuildFriendlyMessageAsync(response)
             };
         }
 

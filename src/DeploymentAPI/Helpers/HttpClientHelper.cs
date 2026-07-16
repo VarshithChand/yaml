@@ -1,4 +1,5 @@
 using System.Net;
+using Newtonsoft.Json.Linq;
 
 namespace DeploymentAPI.Helpers
 {
@@ -11,7 +12,7 @@ namespace DeploymentAPI.Helpers
             var response = await client.GetAsync(url);
 
             if (!response.IsSuccessStatusCode)
-                throw await BuildFriendlyExceptionAsync(response);
+                throw new HttpRequestException(await BuildFriendlyMessageAsync(response), null, response.StatusCode);
 
             return await response.Content.ReadAsStringAsync();
         }
@@ -24,7 +25,7 @@ namespace DeploymentAPI.Helpers
             var response = await client.PostAsync(url, content);
 
             if (!response.IsSuccessStatusCode)
-                throw await BuildFriendlyExceptionAsync(response);
+                throw new HttpRequestException(await BuildFriendlyMessageAsync(response), null, response.StatusCode);
 
             return await response.Content.ReadAsStringAsync();
         }
@@ -34,14 +35,21 @@ namespace DeploymentAPI.Helpers
         public static async Task EnsureSuccessAsync(HttpResponseMessage response)
         {
             if (!response.IsSuccessStatusCode)
-                throw await BuildFriendlyExceptionAsync(response);
+                throw new HttpRequestException(await BuildFriendlyMessageAsync(response), null, response.StatusCode);
         }
 
-        // GitHub's anonymous rate limit is 60 requests/hour/IP (vs. 5,000/hour
-        // with a PAT) — surface that distinction instead of a raw status code,
-        // since it's the single most common failure this app hits without a token.
-        private static async Task<HttpRequestException> BuildFriendlyExceptionAsync(HttpResponseMessage response)
+        // Turns a failed GitHub API response into plain language instead of a
+        // raw status code or JSON body (e.g. `{"message":"Requires
+        // authentication",...}`) reaching someone with no idea what that means
+        // or what to do about it. Public (not just used to build the thrown
+        // exception above) so callers that report failure through a result DTO
+        // instead of an exception — like triggering a deployment — get the
+        // same friendly text rather than dumping the raw response themselves.
+        public static async Task<string> BuildFriendlyMessageAsync(HttpResponseMessage response)
         {
+            // GitHub's anonymous rate limit is 60 requests/hour/IP (vs. 5,000/hour
+            // with a PAT) — surface that distinction instead of a raw status code,
+            // since it's the single most common failure this app hits without a token.
             var isRateLimit =
                 (response.StatusCode == HttpStatusCode.Forbidden || response.StatusCode == HttpStatusCode.TooManyRequests)
                 && response.Headers.TryGetValues("X-RateLimit-Remaining", out var remaining)
@@ -58,19 +66,49 @@ namespace DeploymentAPI.Helpers
                     resetSuffix = $" Resets at {resetAt:t}.";
                 }
 
-                return new HttpRequestException(
-                    "GitHub API rate limit exceeded. Add a Personal Access Token in Settings to raise this from " +
-                    $"60 to 5,000 requests/hour.{resetSuffix}",
-                    null,
-                    response.StatusCode);
+                return "GitHub API rate limit exceeded. Add a Personal Access Token in Settings to raise this " +
+                    $"from 60 to 5,000 requests/hour.{resetSuffix}";
             }
 
             var body = await response.Content.ReadAsStringAsync();
+            var githubMessage = ExtractGitHubMessage(body);
 
-            return new HttpRequestException(
-                $"GitHub API request failed ({(int)response.StatusCode} {response.StatusCode}): {body}",
-                null,
-                response.StatusCode);
+            return response.StatusCode switch
+            {
+                HttpStatusCode.Unauthorized =>
+                    "GitHub rejected this request because it requires authentication. Add a Personal Access " +
+                    "Token with the \"repo\" and \"workflow\" scopes in Settings, then try again.",
+
+                HttpStatusCode.Forbidden =>
+                    "GitHub denied this request. Your Personal Access Token may be missing the \"repo\" or " +
+                    "\"workflow\" scope, or doesn't have access to this repository — check it in Settings.",
+
+                HttpStatusCode.NotFound =>
+                    "GitHub couldn't find what was requested. Double-check the repository, branch, or " +
+                    "workflow configured in Settings.",
+
+                HttpStatusCode.UnprocessableEntity =>
+                    string.IsNullOrWhiteSpace(githubMessage)
+                        ? "GitHub rejected this request — the branch or the values sent to the workflow may not be valid."
+                        : $"GitHub rejected this request: {githubMessage}",
+
+                _ =>
+                    string.IsNullOrWhiteSpace(githubMessage)
+                        ? $"GitHub API request failed ({(int)response.StatusCode} {response.StatusCode})."
+                        : $"GitHub API request failed: {githubMessage}"
+            };
+        }
+
+        private static string? ExtractGitHubMessage(string body)
+        {
+            try
+            {
+                return JObject.Parse(body)["message"]?.ToString();
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 }
