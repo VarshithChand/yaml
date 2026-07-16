@@ -10,6 +10,7 @@ import { getRateLimit } from "../../services/githubService";
 const TABS = [
     { key: "dashboard", label: "Dashboard" },
     { key: "deploy", label: "Deploy" },
+    { key: "approvals", label: "Approvals" },
     { key: "storage", label: "Artifacts & Images" },
     { key: "analytics", label: "Analytics" },
     { key: "timeline", label: "Timeline" },

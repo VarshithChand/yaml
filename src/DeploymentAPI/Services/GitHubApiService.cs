@@ -509,6 +509,113 @@ public class GitHubApiService
             return (WorkflowDto?)MapRun(JObject.Parse(json));
         });
 
+    //===========================================================
+    // Pending Approvals (protected-environment review gate)
+    //===========================================================
+
+    // GitHub reports a run paused at a required-reviewer environment gate
+    // (RC, Cluster01/02/03, ...) with its own status of "waiting" — checking
+    // only those (rarely more than one or two at a time out of everything
+    // in the recent-runs list) avoids a pending_deployments call per run.
+    public async Task<List<PendingApprovalDto>> GetPendingApprovalsAsync()
+    {
+        var runs = await GetWorkflowRuns();
+
+        var waitingRuns = runs.Where(r => r.Status == "waiting").ToList();
+
+        if (waitingRuns.Count == 0)
+            return new List<PendingApprovalDto>();
+
+        var client = _auth.CreateClient();
+
+        var result = new List<PendingApprovalDto>();
+
+        foreach (var run in waitingRuns)
+        {
+            var url =
+                $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/actions/runs/{run.Id}/pending_deployments";
+
+            var json = await HttpClientHelper.GetAsync(client, url);
+            var array = JArray.Parse(json);
+
+            if (array.Count == 0)
+                continue;
+
+            result.Add(new PendingApprovalDto
+            {
+                RunId = run.Id,
+                WorkflowName = run.Name,
+                Branch = run.Branch,
+                TriggeredBy = run.TriggeredBy,
+                CreatedAt = run.CreatedAt,
+                CommitMessage = run.CommitMessage,
+                Environments = array.Select(e => new PendingEnvironmentDto
+                {
+                    Id = (long?)e["environment"]?["id"] ?? 0,
+
+                    Name = e["environment"]?["name"]?.ToString() ?? string.Empty,
+
+                    Reviewers = (e["reviewers"] as JArray)?
+                        .Select(r => r["reviewer"]?["login"]?.ToString() ?? r["reviewer"]?["name"]?.ToString() ?? string.Empty)
+                        .Where(name => !string.IsNullOrWhiteSpace(name))
+                        .ToList() ?? new List<string>()
+                }).ToList()
+            });
+        }
+
+        return result;
+    }
+
+    public async Task SubmitApprovalAsync(ApprovalDecisionDto decision)
+    {
+        var client = _auth.CreateClient();
+
+        var url =
+            $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/actions/runs/{decision.RunId}/pending_deployments";
+
+        var body = new
+        {
+            environment_ids = decision.EnvironmentIds,
+            state = decision.Approve ? "approved" : "rejected",
+            comment = string.IsNullOrWhiteSpace(decision.Comment)
+                ? (decision.Approve ? "Approved via Deployment Portal" : "Rejected via Deployment Portal")
+                : decision.Comment
+        };
+
+        var json = System.Text.Json.JsonSerializer.Serialize(body);
+
+        var response = await client.PostAsync(url, new StringContent(json, Encoding.UTF8, "application/json"));
+
+        await HttpClientHelper.EnsureSuccessAsync(response);
+
+        // The decided run is no longer "waiting" — drop the cached runs
+        // list so this page (and Dashboard/History) reflect that
+        // immediately instead of for up to CacheDuration.
+        _cache.Remove($"runs:{_auth.Owner}/{_auth.Repository}");
+    }
+
+    //===========================================================
+    // Approval History (recent outcomes of release/deploy runs)
+    //===========================================================
+
+    // GitHub doesn't expose a dedicated "who approved/rejected and when"
+    // log for non-Enterprise repos — this is the closest honest
+    // approximation available: the most recent completed runs of
+    // release/deploy-shaped workflows, so a decision's eventual outcome
+    // (success, failure, or cancelled — which is what a rejection and a
+    // manual cancel both surface as) is visible without a trip to GitHub.
+    public async Task<List<WorkflowDto>> GetApprovalHistoryAsync()
+    {
+        var runs = await GetWorkflowRuns();
+
+        return runs
+            .Where(r => r.Status == "completed"
+                && System.Text.RegularExpressions.Regex.IsMatch(r.Name, "release|deploy", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            .OrderByDescending(r => r.CreatedAt)
+            .Take(20)
+            .ToList();
+    }
+
     private static WorkflowDto MapRun(JToken x) => new()
     {
         Id = (long?)x["id"] ?? 0,
