@@ -51,8 +51,9 @@ export default function History() {
 
     }
 
-    // Refresh every 5 seconds
-    usePolling(loadHistory, 5000);
+    // 20s, not 5s — GitHub's anonymous rate limit is only 60 requests/hour,
+    // and this polls continuously for as long as the History page stays open.
+    usePolling(loadHistory, 20000);
 
     if (loading) {
 

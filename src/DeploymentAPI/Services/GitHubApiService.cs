@@ -13,11 +13,12 @@ public class GitHubApiService
     private readonly GitHubAuthService _auth;
     private readonly IMemoryCache _cache;
 
-    // Short enough to still feel live, long enough to absorb duplicate calls
-    // from React StrictMode's dev-mode double-invoke and overlapping polling
-    // components — meaningfully reduces pressure on GitHub's rate limit
-    // (especially the 60/hour anonymous limit when no PAT is configured).
-    private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(4);
+    // Long enough that the frontend's polling (every 20-30s on the Dashboard,
+    // History, Analytics and Timeline pages) is served from cache on every
+    // tick except the first — without this, those polls alone exhaust
+    // GitHub's 60/hour anonymous limit within minutes of a single page being
+    // left open, making "view without a token" effectively not work.
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(20);
 
     public GitHubApiService(GitHubAuthService auth, IMemoryCache cache)
     {

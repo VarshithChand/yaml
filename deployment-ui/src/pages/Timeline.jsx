@@ -38,7 +38,9 @@ export default function Timeline() {
 
     }
 
-    usePolling(load, 15000);
+    // 30s — GitHub's anonymous rate limit is only 60 requests/hour, and this
+    // polls continuously for as long as the Timeline page stays open.
+    usePolling(load, 30000);
 
     if (loading) {
         return <LoadingSpinner />;

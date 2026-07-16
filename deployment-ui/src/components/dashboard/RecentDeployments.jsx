@@ -16,7 +16,9 @@ export default function RecentDeployments() {
 
     }
 
-    usePolling(loadRuns, 5000);
+    // 20s, not 5s — GitHub's anonymous rate limit is only 60 requests/hour,
+    // and this polls continuously for as long as the Dashboard stays open.
+    usePolling(loadRuns, 20000);
 
     return (
 
