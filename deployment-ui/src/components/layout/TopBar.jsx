@@ -20,6 +20,9 @@ const TABS = [
 // The single persistent header: brand, primary nav, and account/theme
 // controls all in one bar, present on every page — not a separate nav
 // strip plus a per-page header that only some pages happened to render.
+// Below the collapse breakpoint (see .top-bar-menu-toggle in global.css)
+// the nav + actions move into a dropdown panel behind a menu button
+// instead of wrapping onto extra rows in an uncontrolled way.
 export default function TopBar() {
 
     const { theme, toggleTheme } = useTheme();
@@ -27,6 +30,7 @@ export default function TopBar() {
     const { tab, setTab } = useNavigation();
 
     const [rateLimit, setRateLimit] = useState(null);
+    const [menuOpen, setMenuOpen] = useState(false);
 
     async function loadRateLimit() {
 
@@ -49,6 +53,13 @@ export default function TopBar() {
     // usePolling fires once immediately on mount, then on the interval.
     usePolling(loadRateLimit, 30000);
 
+    function handleTabClick(key) {
+
+        setTab(key);
+        setMenuOpen(false);
+
+    }
+
     return (
 
         <header className="top-bar">
@@ -57,78 +68,92 @@ export default function TopBar() {
                 <Logo showEyebrow={false} size={32} />
             </div>
 
-            <nav className="app-nav">
+            <button
+                type="button"
+                className="top-bar-menu-toggle"
+                aria-label={menuOpen ? "Close menu" : "Open menu"}
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen((open) => !open)}
+            >
+                {menuOpen ? "✕" : "☰"}
+            </button>
 
-                {TABS.map((t) => (
+            <div className={`top-bar-collapsible ${menuOpen ? "open" : ""}`}>
 
-                    <button
-                        key={t.key}
-                        className={`nav-tab ${tab === t.key ? "active" : ""}`}
-                        onClick={() => setTab(t.key)}
-                    >
-                        {t.label}
-                    </button>
+                <nav className="app-nav">
 
-                ))}
+                    {TABS.map((t) => (
 
-            </nav>
-
-            <div className="top-bar-actions">
-
-                {!loading && (
-
-                    user ? (
-
-                        <div className="user-badge">
-
-                            <span>{user.login}</span>
-
-                            <span className={`badge ${user.role === "Admin" ? "badge-success" : "badge-secondary"}`}>
-                                {user.role}
-                            </span>
-
-                            <button className="theme-toggle" onClick={logout}>
-                                Logout
-                            </button>
-
-                        </div>
-
-                    ) : oauthConfigured ? (
-
-                        <button className="theme-toggle" onClick={login}>
-                            Login with GitHub
+                        <button
+                            key={t.key}
+                            className={`nav-tab ${tab === t.key ? "active" : ""}`}
+                            onClick={() => handleTabClick(t.key)}
+                        >
+                            {t.label}
                         </button>
 
-                    ) : (
+                    ))}
 
-                        <div className="user-badge">
+                </nav>
 
-                            <span className="badge badge-secondary">
-                                Public view
-                            </span>
+                <div className="top-bar-actions">
 
-                            {rateLimit && (
-                                <span
-                                    className={`badge ${rateLimit.remaining <= 10 ? "badge-danger" : "badge-info"}`}
-                                    title={`GitHub API requests remaining this hour — resets at ${new Date(rateLimit.resetAt).toLocaleTimeString()}`}
-                                >
-                                    {rateLimit.remaining}/{rateLimit.limit} requests
+                    {!loading && (
+
+                        user ? (
+
+                            <div className="user-badge">
+
+                                <span>{user.login}</span>
+
+                                <span className={`badge ${user.role === "Admin" ? "badge-success" : "badge-secondary"}`}>
+                                    {user.role}
                                 </span>
-                            )}
 
-                            <button className="theme-toggle" onClick={() => setTab("settings")}>
-                                Set up GitHub Login
+                                <button className="theme-toggle" onClick={logout}>
+                                    Logout
+                                </button>
+
+                            </div>
+
+                        ) : oauthConfigured ? (
+
+                            <button className="theme-toggle" onClick={login}>
+                                Login with GitHub
                             </button>
 
-                        </div>
+                        ) : (
 
-                    )
+                            <div className="user-badge">
 
-                )}
+                                <span className="badge badge-secondary">
+                                    Public view
+                                </span>
 
-                <button className="theme-toggle" onClick={toggleTheme}>
-                    {theme === "dark" ? "Light Mode" : "Dark Mode"}
-                </button>
+                                {rateLimit && (
+                                    <span
+                                        className={`badge ${rateLimit.remaining <= 10 ? "badge-danger" : "badge-info"}`}
+                                        title={`GitHub API requests remaining this hour — resets at ${new Date(rateLimit.resetAt).toLocaleTimeString()}`}
+                                    >
+                                        {rateLimit.remaining}/{rateLimit.limit}
+                                    </span>
+                                )}
+
+                                <button className="theme-toggle" onClick={() => handleTabClick("settings")}>
+                                    Set up GitHub Login
+                                </button>
+
+                            </div>
+
+                        )
+
+                    )}
+
+                    <button className="theme-toggle" onClick={toggleTheme}>
+                        {theme === "dark" ? "Light Mode" : "Dark Mode"}
+                    </button>
+
+                </div>
 
             </div>
 

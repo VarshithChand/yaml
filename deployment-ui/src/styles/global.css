@@ -334,7 +334,7 @@ textarea{
 
     align-items:center;
 
-    gap:24px;
+    gap:16px;
 
     padding:10px 24px;
 
@@ -343,8 +343,6 @@ textarea{
     border-bottom:1px solid var(--border);
 
     box-shadow:0 1px 4px var(--card-shadow);
-
-    flex-wrap:wrap;
 
 }
 
@@ -357,6 +355,44 @@ textarea{
 .top-bar-brand .logo-title{
 
     font-size:17px;
+
+}
+
+/* Wraps nav + actions so both can collapse into one dropdown panel below
+   the breakpoint, instead of each wrapping onto its own extra row. */
+.top-bar-collapsible{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:16px;
+
+    flex:1;
+
+    min-width:0;
+
+}
+
+.top-bar-menu-toggle{
+
+    display:none;
+
+    background:transparent;
+
+    border:1px solid var(--border);
+
+    border-radius:8px;
+
+    color:var(--text);
+
+    font-size:18px;
+
+    line-height:1;
+
+    padding:8px 14px;
+
+    margin-left:auto;
 
 }
 
@@ -1629,11 +1665,13 @@ textarea{
 
     display:flex;
 
-    gap:8px;
+    gap:6px;
 
     padding:0;
 
-    flex-wrap:wrap;
+    flex-wrap:nowrap;
+
+    overflow-x:auto;
 
 }
 
@@ -1647,11 +1685,15 @@ textarea{
 
     border-radius:8px;
 
-    padding:10px 18px;
+    padding:8px 14px;
 
-    font-size:14px;
+    font-size:13.5px;
 
     font-weight:600;
+
+    white-space:nowrap;
+
+    flex-shrink:0;
 
     transition:background-color .2s ease, border-color .2s ease, color .2s ease, transform .15s ease;
 
@@ -1738,6 +1780,58 @@ textarea{
 /* ==========================================
    RESPONSIVE
 ========================================== */
+
+/* Below this, the logo + 7 nav tabs + action badges/buttons no longer fit
+   on one row — collapse nav + actions into a dropdown behind a menu button
+   instead of letting them wrap onto uncontrolled extra rows. */
+@media(max-width:1650px){
+
+    .top-bar-menu-toggle{
+        display:block;
+    }
+
+    .top-bar-collapsible{
+        display:none;
+        flex-direction:column;
+        align-items:stretch;
+        gap:16px;
+        position:absolute;
+        top:100%;
+        left:0;
+        right:0;
+        background:var(--card-bg);
+        border-bottom:1px solid var(--border);
+        box-shadow:0 8px 20px var(--card-shadow);
+        padding:16px 24px;
+        max-height:calc(100vh - 60px);
+        overflow-y:auto;
+    }
+
+    .top-bar-collapsible.open{
+        display:flex;
+    }
+
+    .app-nav{
+        flex-direction:column;
+        overflow-x:visible;
+    }
+
+    .nav-tab{
+        width:100%;
+        text-align:left;
+    }
+
+    .top-bar-actions{
+        flex-direction:column;
+        align-items:stretch;
+        margin-left:0;
+    }
+
+    .user-badge{
+        flex-wrap:wrap;
+    }
+
+}
 
 @media(max-width:992px){
 
