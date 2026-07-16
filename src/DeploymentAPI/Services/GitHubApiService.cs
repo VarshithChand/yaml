@@ -194,6 +194,22 @@ public class GitHubApiService
         return (bytes, $"artifact-{artifactId}.zip");
     }
 
+    public async Task DeleteArtifactAsync(long artifactId)
+    {
+        var client = _auth.CreateClient();
+
+        var url =
+            $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/actions/artifacts/{artifactId}";
+
+        var response = await client.DeleteAsync(url);
+
+        await HttpClientHelper.EnsureSuccessAsync(response);
+
+        // Otherwise the deleted artifact would still show up in the list for
+        // up to CacheDuration, since GetArtifacts() caches its response.
+        _cache.Remove($"artifacts:{_auth.Owner}/{_auth.Repository}");
+    }
+
     //===========================================================
     // Docker / Container Images (GitHub Container Registry)
     //===========================================================

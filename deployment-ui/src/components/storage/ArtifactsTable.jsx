@@ -1,6 +1,31 @@
 import formatBytes from "../../utils/formatBytes";
+import useAuth from "../../hooks/useAuth";
+import useNavigation from "../../hooks/useNavigation";
+import useToast from "../../hooks/useToast";
 
-export default function ArtifactsTable({ artifacts = [], owner, repository }) {
+export default function ArtifactsTable({ artifacts = [], owner, repository, onDelete, deletingId }) {
+
+    const { githubTokenConfigured } = useAuth();
+    const { setTab } = useNavigation();
+    const toast = useToast();
+
+    function handleDeleteClick(artifact) {
+
+        if (!githubTokenConfigured) {
+
+            toast.show(
+                "A GitHub Personal Access Token is required to delete artifacts. Add one in Settings.",
+                "error"
+            );
+
+            setTab("settings");
+            return;
+
+        }
+
+        onDelete(artifact);
+
+    }
 
     return (
 
@@ -33,6 +58,7 @@ export default function ArtifactsTable({ artifacts = [], owner, repository }) {
                             <th>Status</th>
                             <th>Created</th>
                             <th>Download</th>
+                            <th>Delete</th>
                         </tr>
 
                     </thead>
@@ -67,6 +93,17 @@ export default function ArtifactsTable({ artifacts = [], owner, repository }) {
                                             Download
                                         </a>
                                     )}
+                                </td>
+
+                                <td>
+                                    <button
+                                        className="btn btn-danger"
+                                        style={{ padding: "6px 14px", fontSize: "13px" }}
+                                        disabled={deletingId === artifact.id}
+                                        onClick={() => handleDeleteClick(artifact)}
+                                    >
+                                        {deletingId === artifact.id ? "Deleting..." : "Delete"}
+                                    </button>
                                 </td>
 
                             </tr>

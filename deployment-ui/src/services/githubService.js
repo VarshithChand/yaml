@@ -12,6 +12,10 @@ export const getArtifacts = async () => {
     return await api.get("/artifacts");
 };
 
+export const deleteArtifact = async (id) => {
+    return await api.delete(`/artifacts/${id}`);
+};
+
 export const getDockerImages = async () => {
     return await api.get("/docker-images");
 };

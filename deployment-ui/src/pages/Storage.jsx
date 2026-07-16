@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 
-import { getArtifacts, getDockerImages } from "../services/githubService";
+import { getArtifacts, getDockerImages, deleteArtifact } from "../services/githubService";
 import { getSettings } from "../services/settingsService";
 
 import LoadingSpinner from "../components/LoadingSpinner";
 import PageLayout from "../components/layout/PageLayout";
 import ArtifactsTable from "../components/storage/ArtifactsTable";
 import DockerImagesTable from "../components/storage/DockerImagesTable";
+import useToast from "../hooks/useToast";
 
 export default function Storage() {
 
@@ -18,6 +19,9 @@ export default function Storage() {
 
     const [loading, setLoading] = useState(true);
     const [imagesError, setImagesError] = useState("");
+    const [deletingId, setDeletingId] = useState(null);
+
+    const toast = useToast();
 
     async function load() {
 
@@ -79,6 +83,39 @@ export default function Storage() {
 
     }, []);
 
+    async function handleDeleteArtifact(artifact) {
+
+        if (!window.confirm(`Delete artifact "${artifact.name}"? This cannot be undone.`)) {
+            return;
+        }
+
+        try {
+
+            setDeletingId(artifact.id);
+
+            await deleteArtifact(artifact.id);
+
+            setArtifacts((prev) => prev.filter((a) => a.id !== artifact.id));
+            toast.show(`Deleted "${artifact.name}".`, "success");
+
+        }
+        catch (err) {
+
+            console.error(err);
+            toast.show(
+                err.response?.data?.message || "Failed to delete artifact.",
+                "error"
+            );
+
+        }
+        finally {
+
+            setDeletingId(null);
+
+        }
+
+    }
+
     if (loading) {
         return <LoadingSpinner />;
     }
@@ -91,6 +128,8 @@ export default function Storage() {
                 artifacts={artifacts}
                 owner={owner}
                 repository={repository}
+                onDelete={handleDeleteArtifact}
+                deletingId={deletingId}
             />
 
             <br />

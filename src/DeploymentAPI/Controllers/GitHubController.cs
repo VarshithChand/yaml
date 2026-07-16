@@ -48,6 +48,13 @@ public class GitHubController : ControllerBase
         return File(content, "application/zip", fileName);
     }
 
+    [HttpDelete("artifacts/{id}")]
+    public async Task<IActionResult> DeleteArtifact(long id)
+    {
+        await _service.DeleteArtifactAsync(id);
+        return NoContent();
+    }
+
     [HttpGet("workflows")]
     public async Task<IActionResult> Workflows()
     {
