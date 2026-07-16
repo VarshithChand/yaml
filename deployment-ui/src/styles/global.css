@@ -488,6 +488,16 @@ textarea{
 
 }
 
+.form-control:disabled{
+
+    background:var(--table-row-hover);
+
+    color:var(--text-muted);
+
+    cursor:not-allowed;
+
+}
+
 .form-control:focus{
 
     border-color:var(--heading-accent);

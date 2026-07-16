@@ -432,9 +432,10 @@ export default function Settings() {
                     <input
                         type="password"
                         className="form-control"
-                        placeholder={githubTokenConfigured ? "Leave blank to keep current token" : "ghp_..."}
+                        placeholder={githubTokenConfigured ? "Token saved — click \"Clear Token\" to change it" : "ghp_..."}
                         value={githubToken}
                         onChange={(e) => setGithubToken(e.target.value)}
+                        disabled={githubTokenConfigured}
                     />
                 </div>
 
