@@ -1,7 +1,11 @@
+import { useState } from "react";
+
 import useTheme from "../../hooks/useTheme";
 import useAuth from "../../hooks/useAuth";
 import useNavigation from "../../hooks/useNavigation";
+import usePolling from "../../hooks/usePolling";
 import Logo from "../common/Logo";
+import { getRateLimit } from "../../services/githubService";
 
 const TABS = [
     { key: "dashboard", label: "Dashboard" },
@@ -21,6 +25,29 @@ export default function TopBar() {
     const { theme, toggleTheme } = useTheme();
     const { user, loading, login, logout, oauthConfigured } = useAuth();
     const { tab, setTab } = useNavigation();
+
+    const [rateLimit, setRateLimit] = useState(null);
+
+    async function loadRateLimit() {
+
+        try {
+
+            const response = await getRateLimit();
+            setRateLimit(response.data);
+
+        }
+        catch (err) {
+
+            console.error(err);
+
+        }
+
+    }
+
+    // Checking /rate_limit doesn't itself consume any quota, so polling it
+    // is free — this is what lets "Public view" show a live remaining count.
+    // usePolling fires once immediately on mount, then on the interval.
+    usePolling(loadRateLimit, 30000);
 
     return (
 
@@ -79,6 +106,15 @@ export default function TopBar() {
                             <span className="badge badge-secondary">
                                 Public view
                             </span>
+
+                            {rateLimit && (
+                                <span
+                                    className={`badge ${rateLimit.remaining <= 10 ? "badge-danger" : "badge-info"}`}
+                                    title={`GitHub API requests remaining this hour — resets at ${new Date(rateLimit.resetAt).toLocaleTimeString()}`}
+                                >
+                                    {rateLimit.remaining}/{rateLimit.limit} requests
+                                </span>
+                            )}
 
                             <button className="theme-toggle" onClick={() => setTab("settings")}>
                                 Set up GitHub Login

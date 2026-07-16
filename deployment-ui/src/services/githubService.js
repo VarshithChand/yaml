@@ -8,6 +8,10 @@ export const getBranches = async () => {
     return await api.get("/branches");
 };
 
+export const getRateLimit = async () => {
+    return await api.get("/rate-limit");
+};
+
 export const getArtifacts = async () => {
     return await api.get("/artifacts");
 };

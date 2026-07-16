@@ -29,6 +29,12 @@ public class GitHubController : ControllerBase
         return Ok(await _service.GetBranches());
     }
 
+    [HttpGet("rate-limit")]
+    public async Task<IActionResult> RateLimit()
+    {
+        return Ok(await _service.GetRateLimitAsync());
+    }
+
     [HttpGet("artifacts")]
     public async Task<IActionResult> Artifacts()
     {

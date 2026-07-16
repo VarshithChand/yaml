@@ -94,6 +94,32 @@ public class GitHubApiService
     }
 
     //===========================================================
+    // Rate Limit (shown next to "Public view" in the top bar)
+    //===========================================================
+
+    // Checking /rate_limit does not itself consume any of the quota it
+    // reports, so this is always fetched fresh rather than cached.
+    public async Task<RateLimitDto> GetRateLimitAsync()
+    {
+        var client = _auth.CreateClient();
+
+        var json = await HttpClientHelper.GetAsync(client, "https://api.github.com/rate_limit");
+
+        var core = JObject.Parse(json)["resources"]?["core"];
+
+        return new RateLimitDto
+        {
+            Limit = (int?)core?["limit"] ?? 0,
+
+            Remaining = (int?)core?["remaining"] ?? 0,
+
+            ResetAt = DateTimeOffset
+                .FromUnixTimeSeconds((long?)core?["reset"] ?? 0)
+                .UtcDateTime
+        };
+    }
+
+    //===========================================================
     // Repository
     //===========================================================
 

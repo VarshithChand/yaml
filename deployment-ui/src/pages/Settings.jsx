@@ -448,16 +448,18 @@ export default function Settings() {
                         onChange={(e) => setGithubToken(e.target.value)}
                         disabled={githubTokenConfigured}
                     />
-                    <a
-                        href="https://github.com/settings/tokens"
-                        target="_blank"
-                        rel="noreferrer"
-                        className={`token-help-link ${isRateLimited ? "token-help-link-alert" : ""}`}
-                    >
-                        {isRateLimited
-                            ? "Rate limit exceeded — generate a token on GitHub →"
-                            : "Generate a token on GitHub →"}
-                    </a>
+                    {!githubTokenConfigured && (
+                        <a
+                            href="https://github.com/settings/tokens"
+                            target="_blank"
+                            rel="noreferrer"
+                            className={`token-help-link ${isRateLimited ? "token-help-link-alert" : ""}`}
+                        >
+                            {isRateLimited
+                                ? "Rate limit exceeded — generate a token on GitHub →"
+                                : "Generate a token on GitHub →"}
+                        </a>
+                    )}
                 </div>
 
                 <div className="button-row">
