@@ -12,6 +12,10 @@ export const getRateLimit = async () => {
     return await api.get("/rate-limit");
 };
 
+export const getTokenOwner = async () => {
+    return await api.get("/token-owner");
+};
+
 export const getArtifacts = async () => {
     return await api.get("/artifacts");
 };

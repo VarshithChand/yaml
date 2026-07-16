@@ -35,6 +35,12 @@ public class GitHubController : ControllerBase
         return Ok(await _service.GetRateLimitAsync());
     }
 
+    [HttpGet("token-owner")]
+    public async Task<IActionResult> TokenOwner()
+    {
+        return Ok(await _service.GetTokenOwnerAsync());
+    }
+
     [HttpGet("artifacts")]
     public async Task<IActionResult> Artifacts()
     {

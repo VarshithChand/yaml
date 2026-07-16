@@ -42,4 +42,6 @@ public class GitHubAuthService
     public string Owner => Settings.Owner;
 
     public string Repository => Settings.Repository;
+
+    public bool HasToken => !string.IsNullOrWhiteSpace(Settings.PersonalAccessToken);
 }

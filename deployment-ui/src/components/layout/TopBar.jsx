@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import useTheme from "../../hooks/useTheme";
 import useAuth from "../../hooks/useAuth";
 import useNavigation from "../../hooks/useNavigation";
 import usePolling from "../../hooks/usePolling";
 import Logo from "../common/Logo";
-import { getRateLimit } from "../../services/githubService";
+import { getRateLimit, getTokenOwner } from "../../services/githubService";
 
 const TABS = [
     { key: "dashboard", label: "Dashboard" },
@@ -27,10 +27,11 @@ const TABS = [
 export default function TopBar() {
 
     const { theme, toggleTheme } = useTheme();
-    const { user, loading, login, logout, oauthConfigured } = useAuth();
+    const { user, loading, login, logout, oauthConfigured, githubTokenConfigured } = useAuth();
     const { tab, setTab } = useNavigation();
 
     const [rateLimit, setRateLimit] = useState(null);
+    const [tokenOwner, setTokenOwner] = useState(null);
     const [menuOpen, setMenuOpen] = useState(false);
 
     async function loadRateLimit() {
@@ -53,6 +54,31 @@ export default function TopBar() {
     // is free — this is what lets "Public view" show a live remaining count.
     // usePolling fires once immediately on mount, then on the interval.
     usePolling(loadRateLimit, 30000);
+
+    // Who the saved Personal Access Token belongs to — shown in place of
+    // "Set up GitHub Login" once a token is configured. githubTokenConfigured
+    // resolves asynchronously after mount, so re-fetch as soon as it flips
+    // rather than only checking once at mount time.
+    useEffect(() => {
+
+        if (!githubTokenConfigured) {
+            setTokenOwner(null);
+            return;
+        }
+
+        let cancelled = false;
+
+        getTokenOwner()
+            .then((response) => {
+                if (!cancelled) setTokenOwner(response.data);
+            })
+            .catch((err) => console.error(err));
+
+        return () => {
+            cancelled = true;
+        };
+
+    }, [githubTokenConfigured]);
 
     function handleTabClick(key) {
 
@@ -140,9 +166,29 @@ export default function TopBar() {
                                     </span>
                                 )}
 
-                                <button className="theme-toggle" onClick={() => handleTabClick("settings")}>
-                                    Set up GitHub Login
-                                </button>
+                                {tokenOwner?.configured ? (
+
+                                    <span
+                                        className="badge badge-success"
+                                        title="GitHub Personal Access Token owner — deployments and approvals run as this account"
+                                    >
+                                        {tokenOwner.avatarUrl && (
+                                            <img
+                                                src={tokenOwner.avatarUrl}
+                                                alt=""
+                                                className="token-owner-avatar"
+                                            />
+                                        )}
+                                        {tokenOwner.login}
+                                    </span>
+
+                                ) : (
+
+                                    <button className="theme-toggle" onClick={() => handleTabClick("settings")}>
+                                        Set up GitHub Login
+                                    </button>
+
+                                )}
 
                             </div>
 

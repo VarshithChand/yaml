@@ -420,6 +420,20 @@ textarea{
 
 }
 
+.token-owner-avatar{
+
+    width:16px;
+
+    height:16px;
+
+    border-radius:50%;
+
+    vertical-align:middle;
+
+    margin-right:6px;
+
+}
+
 .info-row{
 
     display:flex;

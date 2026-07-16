@@ -120,6 +120,32 @@ public class GitHubApiService
     }
 
     //===========================================================
+    // Token Owner (top bar — shown instead of "Set up GitHub Login" once a
+    // Personal Access Token is configured)
+    //===========================================================
+
+    public Task<TokenOwnerDto> GetTokenOwnerAsync()
+    {
+        if (!_auth.HasToken)
+            return Task.FromResult(new TokenOwnerDto { Configured = false });
+
+        return GetCachedAsync("token-owner", async () =>
+        {
+            var client = _auth.CreateClient();
+
+            var json = await HttpClientHelper.GetAsync(client, "https://api.github.com/user");
+            var user = JObject.Parse(json);
+
+            return new TokenOwnerDto
+            {
+                Configured = true,
+                Login = user["login"]?.ToString() ?? string.Empty,
+                AvatarUrl = user["avatar_url"]?.ToString() ?? string.Empty
+            };
+        });
+    }
+
+    //===========================================================
     // Repository
     //===========================================================
 
