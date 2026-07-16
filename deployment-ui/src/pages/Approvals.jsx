@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import usePolling from "../hooks/usePolling";
 import { getPendingApprovals, submitApprovalDecision, getApprovalHistory } from "../services/approvalsService";
@@ -56,6 +56,18 @@ export default function Approvals() {
     // useful when something is actually waiting, so it doesn't need to be
     // any faster than that.
     usePolling(load, 20000);
+
+    // githubTokenConfigured resolves asynchronously after mount (it starts
+    // false until AuthContext's settings fetch completes). Re-run load()
+    // the moment it flips instead of waiting for the next 20s poll tick.
+    useEffect(() => {
+
+        if (githubTokenConfigured) {
+            load();
+        }
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [githubTokenConfigured]);
 
     function toggleEnv(runId, envId) {
 
