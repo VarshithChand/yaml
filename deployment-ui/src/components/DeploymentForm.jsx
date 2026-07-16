@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { deploy } from "../services/deploymentService";
-import { getWorkflowInputs } from "../services/githubService";
+import { getWorkflowInputs, getLastRun } from "../services/githubService";
 
 import ConfirmDialog from "./ConfirmDialog";
 import ProgressBar from "./ProgressBar";
@@ -47,6 +47,12 @@ export default function DeploymentForm({
 
     const [deploying, setDeploying] = useState(false);
     const [runId, setRunId] = useState(null);
+
+    // What the selected workflow (on the selected branch, if any) did last
+    // time — shown in Deployment Summary so you can see the previous run's
+    // outcome and artifact before triggering it again.
+    const [lastRun, setLastRun] = useState(null);
+    const [lastRunLoading, setLastRunLoading] = useState(false);
 
     const [confirm, setConfirm] = useState(false);
 
@@ -194,6 +200,48 @@ export default function DeploymentForm({
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [workflow, showInputs, branch]);
+
+    useEffect(() => {
+
+        if (!workflow) {
+            setLastRun(null);
+            return;
+        }
+
+        let cancelled = false;
+
+        setLastRunLoading(true);
+
+        getLastRun(workflow, branch)
+            .then((response) => {
+
+                if (!cancelled) {
+                    setLastRun(response.data);
+                }
+
+            })
+            .catch((err) => {
+
+                console.error(err);
+
+                if (!cancelled) {
+                    setLastRun(null);
+                }
+
+            })
+            .finally(() => {
+
+                if (!cancelled) {
+                    setLastRunLoading(false);
+                }
+
+            });
+
+        return () => {
+            cancelled = true;
+        };
+
+    }, [workflow, branch]);
 
     const artifactInput = (workflowInputs || []).find((i) => /artifact/i.test(i.name));
     const dockerInput = (workflowInputs || []).find((i) => /docker|image/i.test(i.name));
@@ -747,6 +795,10 @@ export default function DeploymentForm({
                 workflowInputs={showInputs ? workflowInputs : null}
 
                 inputValues={inputValues}
+
+                lastRun={lastRun}
+
+                lastRunLoading={lastRunLoading}
 
             />
 

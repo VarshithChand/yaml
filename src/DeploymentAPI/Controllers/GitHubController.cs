@@ -76,4 +76,13 @@ public class GitHubController : ControllerBase
 
         return Ok(await _service.GetWorkflowInputsAsync(path, branch));
     }
+
+    [HttpGet("workflows/last-run")]
+    public async Task<IActionResult> LastRun([FromQuery] string workflow, [FromQuery] string? branch)
+    {
+        if (string.IsNullOrWhiteSpace(workflow))
+            return BadRequest("workflow is required.");
+
+        return Ok(await _service.GetLatestRunSummaryAsync(workflow, branch));
+    }
 }

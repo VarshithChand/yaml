@@ -228,6 +228,72 @@ public class GitHubApiService
                 .ToList();
         });
 
+    //===========================================================
+    // Latest Run For A Workflow (Deploy page — "what did this do last time?")
+    //===========================================================
+
+    public Task<LatestRunSummaryDto> GetLatestRunSummaryAsync(string workflow, string? branch) =>
+        GetCachedAsync($"last-run:{_auth.Owner}/{_auth.Repository}/{workflow}/{branch}", async () =>
+        {
+            var client = _auth.CreateClient();
+
+            var workflowId = NormalizeWorkflowId(workflow);
+
+            var branchQuery = string.IsNullOrWhiteSpace(branch)
+                ? string.Empty
+                : $"&branch={Uri.EscapeDataString(branch)}";
+
+            var runsUrl =
+                $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/actions/workflows/{workflowId}/runs" +
+                $"?per_page=1{branchQuery}";
+
+            var runsJson = await HttpClientHelper.GetAsync(client, runsUrl);
+            var latestRun = (JObject.Parse(runsJson)["workflow_runs"] as JArray)?.FirstOrDefault();
+
+            if (latestRun == null)
+                return new LatestRunSummaryDto();
+
+            var run = MapRun(latestRun);
+
+            // The dedicated per-run artifacts endpoint, not the repo-wide list —
+            // this only returns what that specific run produced.
+            var artifactsUrl =
+                $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/actions/runs/{run.Id}/artifacts";
+
+            var artifactsJson = await HttpClientHelper.GetAsync(client, artifactsUrl);
+
+            var artifact = (JObject.Parse(artifactsJson)["artifacts"] as JArray)?
+                .Where(a => !(a["name"]?.ToString() ?? "").StartsWith("publish-files", StringComparison.OrdinalIgnoreCase))
+                .Select(a => new ArtifactDto
+                {
+                    Id = (long?)a["id"] ?? 0,
+
+                    Name = a["name"]?.ToString() ?? string.Empty,
+
+                    Size = (long?)a["size_in_bytes"] ?? 0,
+
+                    Expired = (bool?)a["expired"] ?? false,
+
+                    CreatedAt = DateTime.TryParse(a["created_at"]?.ToString(), out var createdAt)
+                        ? createdAt
+                        : DateTime.MinValue,
+
+                    DownloadUrl = a["archive_download_url"]?.ToString() ?? string.Empty
+                })
+                .FirstOrDefault();
+
+            return new LatestRunSummaryDto { Run = run, Artifact = artifact };
+        });
+
+    // Accepts either the bare file name ("admin.yml"), the full repo-relative
+    // path (".github/workflows/admin.yml"), or a numeric workflow ID — GitHub's
+    // API only understands the first and third forms.
+    private static string NormalizeWorkflowId(string workflow)
+    {
+        var lastSlash = workflow.LastIndexOf('/');
+        return lastSlash >= 0 ? workflow[(lastSlash + 1)..] : workflow;
+    }
+
     // GitHub always requires an authenticated request to download an artifact's
     // zip, even for public repos — a plain browser link can't attach our PAT,
     // so the API proxies the download through the server-side token instead.

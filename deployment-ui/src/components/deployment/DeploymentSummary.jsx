@@ -1,3 +1,6 @@
+import StatusBadge from "../StatusBadge";
+import formatBytes from "../../utils/formatBytes";
+
 function formatInputLabel(name) {
 
     return name
@@ -30,11 +33,16 @@ export default function DeploymentSummary({
     branch,
     workflow,
     workflowInputs,
-    inputValues
+    inputValues,
+    lastRun,
+    lastRunLoading
 
 }) {
 
     const showInputs = mode !== "CI";
+
+    const run = lastRun?.run;
+    const artifact = lastRun?.artifact;
 
     return (
 
@@ -111,6 +119,90 @@ export default function DeploymentSummary({
             </table>
 
             </div>
+
+            {workflow && (
+
+                <>
+
+                    <h2 className="card-title" style={{ marginTop: "20px" }}>
+                        Previous Run
+                    </h2>
+
+                    {lastRunLoading && (
+                        <p className="field-hint">Checking the last run for this workflow...</p>
+                    )}
+
+                    {!lastRunLoading && !run && (
+                        <p className="empty-state">
+                            This workflow hasn't run{branch ? ` on ${branch}` : ""} yet.
+                        </p>
+                    )}
+
+                    {!lastRunLoading && run && (
+
+                        <div className="table-scroll">
+
+                        <table className="table">
+
+                            <tbody>
+
+                                <tr>
+                                    <td><strong>Status</strong></td>
+                                    <td>
+                                        <StatusBadge status={run.status === "completed" ? run.conclusion : run.status} />
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <td><strong>Triggered by</strong></td>
+                                    <td>{run.triggeredBy || "-"}</td>
+                                </tr>
+
+                                <tr>
+                                    <td><strong>When</strong></td>
+                                    <td>{new Date(run.createdAt).toLocaleString()}</td>
+                                </tr>
+
+                                <tr>
+                                    <td><strong>Artifact</strong></td>
+                                    <td>
+                                        {artifact ? artifact.name : "None produced"}
+                                    </td>
+                                </tr>
+
+                                {artifact && (
+
+                                    <tr>
+                                        <td><strong>Location</strong></td>
+                                        <td>
+                                            {formatBytes(artifact.size)}
+                                            {" — "}
+                                            {artifact.expired ? (
+                                                <span className="empty-state">Expired</span>
+                                            ) : (
+                                                <a
+                                                    href={`/api/github/artifacts/${artifact.id}/download`}
+                                                    className="token-help-link"
+                                                >
+                                                    Download →
+                                                </a>
+                                            )}
+                                        </td>
+                                    </tr>
+
+                                )}
+
+                            </tbody>
+
+                        </table>
+
+                        </div>
+
+                    )}
+
+                </>
+
+            )}
 
         </div>
 
