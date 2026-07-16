@@ -190,7 +190,7 @@ export default function Settings() {
         catch (err) {
 
             console.error(err);
-            toast.show("Failed to save GitHub settings.", "error");
+            toast.show(err.response?.data?.message || "Failed to save GitHub settings.", "error");
 
         }
         finally {
@@ -221,7 +221,7 @@ export default function Settings() {
         catch (err) {
 
             console.error(err);
-            toast.show("Failed to save Docker settings.", "error");
+            toast.show(err.response?.data?.message || "Failed to save Docker settings.", "error");
 
         }
         finally {
@@ -252,7 +252,7 @@ export default function Settings() {
         catch (err) {
 
             console.error(err);
-            toast.show("Failed to save GitHub OAuth settings.", "error");
+            toast.show(err.response?.data?.message || "Failed to save GitHub OAuth settings.", "error");
 
         }
         finally {
@@ -283,7 +283,7 @@ export default function Settings() {
         catch (err) {
 
             console.error(err);
-            toast.show("Failed to save admin allowlist.", "error");
+            toast.show(err.response?.data?.message || "Failed to save admin allowlist.", "error");
 
         }
         finally {
@@ -325,7 +325,7 @@ export default function Settings() {
         catch (err) {
 
             console.error(err);
-            toast.show(`Failed to clear ${label}.`, "error");
+            toast.show(err.response?.data?.message || `Failed to clear ${label}.`, "error");
 
         }
 
