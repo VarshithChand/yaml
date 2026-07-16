@@ -7,11 +7,12 @@ import Timeline from "./pages/Timeline";
 import Settings from "./pages/Settings";
 
 import TopBar from "./components/layout/TopBar";
+import ErrorBoundary from "./components/common/ErrorBoundary";
 import useNavigation from "./hooks/useNavigation";
 
 function App(){
 
-    const { tab } = useNavigation();
+    const { tab, setTab } = useNavigation();
 
     return(
 
@@ -19,13 +20,17 @@ function App(){
 
             <TopBar />
 
-            {tab === "dashboard" && <Dashboard/>}
-            {tab === "deploy" && <Deploy/>}
-            {tab === "storage" && <Storage/>}
-            {tab === "analytics" && <Analytics/>}
-            {tab === "timeline" && <Timeline/>}
-            {tab === "history" && <History/>}
-            {tab === "settings" && <Settings/>}
+            <ErrorBoundary key={tab} onRecover={() => setTab("dashboard")}>
+
+                {tab === "dashboard" && <Dashboard/>}
+                {tab === "deploy" && <Deploy/>}
+                {tab === "storage" && <Storage/>}
+                {tab === "analytics" && <Analytics/>}
+                {tab === "timeline" && <Timeline/>}
+                {tab === "history" && <History/>}
+                {tab === "settings" && <Settings/>}
+
+            </ErrorBoundary>
 
         </>
 
