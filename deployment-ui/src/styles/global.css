@@ -7,6 +7,11 @@
     --text:#0f172a;
     --text-muted:#64748b;
     --heading-accent:#2563eb;
+    /* Secondary accent — reserved for "in progress / informational" states
+       (running jobs, in_progress badges) so they read as visually distinct
+       from primary brand actions (nav, buttons, headings) instead of
+       everything defaulting to the same blue. */
+    --accent-secondary:#7c3aed;
     --card-bg:#ffffff;
     --card-shadow:rgba(15,23,42,.08);
     --border:#e2e8f0;
@@ -38,6 +43,7 @@
     --text:#e5e7eb;
     --text-muted:#94a3b8;
     --heading-accent:#60a5fa;
+    --accent-secondary:#a78bfa;
     --card-bg:#1e293b;
     --card-shadow:rgba(0,0,0,.4);
     --border:#334155;
@@ -2015,7 +2021,7 @@ textarea{
 }
 
 .badge-info{
-    background:#2563eb;
+    background:var(--accent-secondary);
 }
 
 .badge-secondary{
@@ -2056,7 +2062,7 @@ textarea{
 }
 
 .workflow-node-running{
-    border-color:var(--heading-accent);
+    border-color:var(--accent-secondary);
 }
 
 .workflow-node-success{
@@ -2100,7 +2106,7 @@ textarea{
 }
 
 .workflow-dot-running{
-    background:var(--heading-accent);
+    background:var(--accent-secondary);
     animation:workflow-dot-pulse 1s ease-in-out infinite;
 }
 
@@ -2150,7 +2156,7 @@ textarea{
 }
 
 .workflow-step-active{
-    color:var(--heading-accent);
+    color:var(--accent-secondary);
     font-weight:600;
 }
 
