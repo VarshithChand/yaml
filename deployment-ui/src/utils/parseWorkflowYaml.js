@@ -79,7 +79,8 @@ export function parseWorkflowYaml(yamlText) {
     for (const job of jobs) {
         for (const dep of job.needs) {
             if (!knownIds.has(dep)) {
-                throw new Error(`Job "${job.id}" depends on "${dep}", which doesn't exist in this pipeline.`);
+                const depLabel = dep.includes("::") ? dep.split("::").pop() : dep;
+                throw new Error(`Job "${job.name}" depends on "${depLabel}", which doesn't exist in this pipeline.`);
             }
         }
     }
@@ -246,36 +247,57 @@ function extractAzureJobs(doc, flavor, paramsMap) {
     if (flavor === "azure-jobs") {
 
         const expanded = expandEachLoops(doc.jobs, doc, paramsMap);
-        return expanded.map((raw) => normalizeAzureJob(raw, [])).filter(Boolean);
+        return expanded.map((raw) => normalizeAzureJob(raw, [], null)).filter(Boolean);
 
     }
 
-    // azure-stages: jobs run within a stage in parallel by default; stages
-    // themselves run in sequence — so a job with no explicit "dependsOn"
-    // implicitly depends on every job in the previous stage, and a job
-    // that does specify "dependsOn" (even an empty list, meaning "run
-    // immediately regardless of stage order") is respected as-is.
+    // azure-stages: job IDs only need to be unique WITHIN a stage on real
+    // Azure — the same job id (e.g. "Deploy_Public") commonly repeats
+    // across several stages (one per deploy target). Job objects here are
+    // keyed by "<stage>::<job>" internally so those don't collide into a
+    // single node (or, worse, a job ending up depending on itself once a
+    // same-named job from an earlier stage got treated as its
+    // predecessor) — the stage prefix never reaches the UI, which still
+    // shows each job's own displayName/id.
+    //
+    // Stage order/dependency: a stage's own "dependsOn" (a stage name, or
+    // list of them) is honored when present, including an explicit empty
+    // list (run immediately, no stage dependency). Only when a stage
+    // declares no dependsOn at all does this fall back to Azure's actual
+    // default — depends on the immediately preceding stage.
     const expandedStages = expandEachLoops(doc.stages, doc, paramsMap);
     const jobs = [];
-    let previousStageJobIds = [];
+    const jobIdsByStage = {};
+    let previousStageName = null;
 
-    expandedStages.forEach((stage) => {
+    expandedStages.forEach((stage, stageIndex) => {
 
+        const stageName = stage?.stage || `stage-${stageIndex}`;
         const stageJobsRaw = Array.isArray(stage?.jobs) ? stage.jobs : [];
-        const stageJobIds = [];
+
+        const hasStageDependsOn = stage && typeof stage === "object"
+            && Object.prototype.hasOwnProperty.call(stage, "dependsOn");
+
+        const dependsOnStages = hasStageDependsOn
+            ? (Array.isArray(stage.dependsOn) ? stage.dependsOn : [stage.dependsOn]).filter(Boolean)
+            : (previousStageName ? [previousStageName] : []);
+
+        const implicitNeeds = dependsOnStages.flatMap((depStage) => jobIdsByStage[depStage] || []);
+        const currentStageJobIds = [];
 
         stageJobsRaw.forEach((raw) => {
 
-            const job = normalizeAzureJob(raw, previousStageJobIds);
+            const job = normalizeAzureJob(raw, implicitNeeds, stageName);
 
             if (job) {
                 jobs.push(job);
-                stageJobIds.push(job.id);
+                currentStageJobIds.push(job.id);
             }
 
         });
 
-        if (stageJobIds.length > 0) previousStageJobIds = stageJobIds;
+        jobIdsByStage[stageName] = currentStageJobIds;
+        previousStageName = stageName;
 
     });
 
@@ -283,30 +305,44 @@ function extractAzureJobs(doc, flavor, paramsMap) {
 
 }
 
-function normalizeAzureJob(raw, implicitNeeds) {
+function normalizeAzureJob(raw, implicitNeeds, stageName) {
 
     if (!raw || typeof raw !== "object") return null;
 
-    const id = raw.job || raw.deployment || raw.name;
-    if (!id) return null;
+    const bareId = raw.job || raw.deployment || raw.name;
+    if (!bareId) return null;
+
+    const id = stageName ? `${stageName}::${bareId}` : bareId;
 
     const hasDependsOn = Object.prototype.hasOwnProperty.call(raw, "dependsOn");
 
+    // Job-level dependsOn refers to another job within the SAME stage on
+    // real Azure (cross-stage ordering is a stage-level concern) — so
+    // targets get the same stage prefix as this job's own id.
     const needs = hasDependsOn
         ? (Array.isArray(raw.dependsOn) ? raw.dependsOn : [raw.dependsOn])
+            .filter(Boolean)
+            .map((dep) => (stageName ? `${stageName}::${dep}` : dep))
         : (implicitNeeds || []);
 
     const steps = Array.isArray(raw.steps)
         ? raw.steps.map((step, index) => ({ name: azureStepLabel(step, index) }))
         : [];
 
+    // A deployment job targeting an environment with checks configured
+    // pauses for approval on real Azure, same as GitHub's environment
+    // gate — reuses the same simulated Approve/Reject pause.
+    const environment = typeof raw.environment === "string"
+        ? raw.environment
+        : (raw.environment && typeof raw.environment === "object" ? raw.environment.name : null);
+
     return {
         id,
-        name: raw.displayName || id,
+        name: raw.displayName || bareId,
         needs,
         runsOn: raw.pool?.vmImage || raw.pool?.name || "",
         steps,
-        environment: null,
+        environment: environment || null,
         referencedParams: extractReferencedParams(raw.condition)
     };
 
