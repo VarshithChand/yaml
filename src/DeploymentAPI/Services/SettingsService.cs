@@ -12,7 +12,16 @@ public class SettingsService
 
     public SettingsService(IHostEnvironment env)
     {
-        _localSettingsPath = Path.Combine(env.ContentRootPath, "appsettings.Local.json");
+        // SETTINGS_FILE_PATH lets a deployment point this at a mounted
+        // persistent volume (e.g. Fly.io) instead of the app's own content
+        // root, which is typically wiped and replaced on every redeploy.
+        // Program.cs points AddJsonFile at the same path, so reads and
+        // writes always agree on where the file lives.
+        var overridePath = Environment.GetEnvironmentVariable("SETTINGS_FILE_PATH");
+
+        _localSettingsPath = string.IsNullOrWhiteSpace(overridePath)
+            ? Path.Combine(env.ContentRootPath, "appsettings.Local.json")
+            : overridePath;
     }
 
     public async Task<SettingsViewDto> GetViewAsync()
@@ -166,6 +175,11 @@ public class SettingsService
 
     private async Task WriteRootAsync(JObject root)
     {
+        var directory = Path.GetDirectoryName(_localSettingsPath);
+
+        if (!string.IsNullOrEmpty(directory))
+            Directory.CreateDirectory(directory);
+
         await File.WriteAllTextAsync(_localSettingsPath, root.ToString());
     }
 }

@@ -3,6 +3,7 @@ import { createContext, useCallback, useEffect, useState } from "react";
 import { getMe, logout as logoutRequest } from "../services/authService";
 import { getSettings } from "../services/settingsService";
 import { getTokenOwner } from "../services/githubService";
+import { API_BASE } from "../api/apiBase";
 import useToast from "../hooks/useToast";
 
 export const AuthContext = createContext();
@@ -108,7 +109,7 @@ export default function AuthProvider({ children }) {
 
     function login() {
 
-        window.location.href = "/api/auth/github/login";
+        window.location.href = `${API_BASE}/api/auth/github/login`;
 
     }
 

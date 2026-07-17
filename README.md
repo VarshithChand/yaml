@@ -135,7 +135,101 @@ Settings saved through the UI persist in the bind-mounted
 
 ---
 
-## 5. Running the sample services (optional)
+## 5. Deploying it for free (Fly.io + Cloudflare Pages)
+
+The backend goes on **Fly.io** (free allowance includes a small persistent volume, so
+saved Settings survive redeploys) and the frontend on **Cloudflare Pages** (free static
+hosting). Since they end up on different domains, this isn't quite the same as local dev —
+the frontend needs to know the backend's absolute URL at build time, and the two host
+setup steps below (`fly deploy`, then the Pages dashboard) each depend on output from the
+other, so do them in order.
+
+### 5a. Deploy the backend to Fly.io
+
+Install the CLI:
+```bash
+# Windows (PowerShell)
+pwsh -Command "iwr https://fly.io/install.ps1 -useb | iex"
+
+# macOS / Linux
+curl -L https://fly.io/install.sh | sh
+```
+
+Log in (opens a browser):
+```bash
+fly auth login
+```
+
+`src/DeploymentAPI/fly.toml` is already set up (Docker build, persistent volume mounted
+at `/data`, port 8080 matching the Dockerfile). Pick a globally-unique app name, put it in
+that file's `app = "..."` line, then:
+
+```bash
+cd src/DeploymentAPI
+
+fly apps create YOUR-UNIQUE-APP-NAME
+
+fly volumes create deployment_data --region iad --size 1 -a YOUR-UNIQUE-APP-NAME
+
+# a real signing secret for login sessions — without this the app still
+# runs (it generates one on its own), but sessions won't survive a restart
+fly secrets set Jwt__Secret="$(openssl rand -base64 32)" -a YOUR-UNIQUE-APP-NAME
+
+fly deploy -a YOUR-UNIQUE-APP-NAME
+```
+
+Confirm it's up:
+```bash
+curl https://YOUR-UNIQUE-APP-NAME.fly.dev/api/settings
+```
+should return an empty settings JSON, not an error.
+
+### 5b. Deploy the frontend to Cloudflare Pages
+
+This part's dashboard-only (Cloudflare doesn't have a "one command" path for a fresh
+project). At [dash.cloudflare.com](https://dash.cloudflare.com/) → **Workers & Pages** →
+**Create** → **Pages** → **Connect to Git** → pick this repo, then set:
+
+| Setting | Value |
+|---|---|
+| Framework preset | Vite |
+| Root directory | `deployment-ui` |
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+
+Under **Environment variables**, add:
+```
+VITE_API_BASE_URL = https://YOUR-UNIQUE-APP-NAME.fly.dev
+```
+(no trailing slash) — this is what makes the built frontend call your Fly.io backend
+instead of expecting a same-origin `/api/*`. Save and deploy; Cloudflare gives you a
+`https://your-project.pages.dev` URL.
+
+### 5c. Point the backend's CORS at the new frontend URL
+
+Back in a terminal:
+```bash
+fly secrets set Cors__AllowedOrigins__0=https://your-project.pages.dev -a YOUR-UNIQUE-APP-NAME
+```
+(Setting a secret restarts the app automatically.) If you later add a custom domain in
+Cloudflare, add it too as `Cors__AllowedOrigins__1`, and so on.
+
+Open the `pages.dev` URL — first-run configuration works exactly as in
+[section 3](#first-run-configuration), except settings now persist on the Fly.io volume
+across redeploys instead of a local file.
+
+**Using GitHub OAuth login in this setup** *(optional)* — the callback/frontend URLs for
+OAuth aren't editable from the Settings page, only via config, so also set:
+```bash
+fly secrets set GitHubOAuth__CallbackUrl=https://YOUR-UNIQUE-APP-NAME.fly.dev/api/auth/github/callback \
+                GitHubOAuth__FrontendUrl=https://your-project.pages.dev \
+                -a YOUR-UNIQUE-APP-NAME
+```
+and set your GitHub OAuth App's callback URL to match the first value.
+
+---
+
+## 6. Running the sample services (optional)
 
 `AdminAPI`, `PMSCoreAPI`, and `SecurityAPI` are the sample ASP.NET Core services this portal
 deploys — you don't need them running to use the portal itself, but if you want to run one
@@ -179,3 +273,13 @@ to raise the limit from 60 to 5,000 requests/hour.
 **The Approvals page/tab isn't showing** — it's only visible to a token that has admin
 access to the configured repo, since that's the permission GitHub requires to approve a
 deployment. Check that the account behind your saved Personal Access Token is a repo admin.
+
+**Deployed on Fly.io/Cloudflare Pages and API calls fail with a CORS error** — the backend
+only allows origins listed in `Cors:AllowedOrigins`; confirm you ran the `fly secrets set
+Cors__AllowedOrigins__0=...` step in [5c](#5c-point-the-backends-cors-at-the-new-frontend-url)
+with your actual `pages.dev` URL (or custom domain).
+
+**Deployed, but "Login with GitHub" doesn't keep you logged in** — this needs
+`GitHubOAuth__CallbackUrl`/`GitHubOAuth__FrontendUrl` set to your real URLs (see the OAuth
+note at the end of section 5), and it only works over HTTPS, which both Fly.io and
+Cloudflare Pages give you by default — plain PAT-based usage doesn't need any of this.

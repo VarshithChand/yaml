@@ -4,6 +4,7 @@ import formatBytes from "../../utils/formatBytes";
 import useAuth from "../../hooks/useAuth";
 import useNavigation from "../../hooks/useNavigation";
 import useToast from "../../hooks/useToast";
+import { API_BASE } from "../../api/apiBase";
 
 export default function ArtifactsTable({ artifacts = [], owner, repository, onDelete, deletingId }) {
 
@@ -101,7 +102,7 @@ export default function ArtifactsTable({ artifacts = [], owner, repository, onDe
                                         <span className="empty-state">—</span>
                                     ) : (
                                         <a
-                                            href={`/api/github/artifacts/${artifact.id}/download`}
+                                            href={`${API_BASE}/api/github/artifacts/${artifact.id}/download`}
                                             className="btn btn-secondary"
                                             style={{ padding: "6px 14px", fontSize: "13px" }}
                                         >

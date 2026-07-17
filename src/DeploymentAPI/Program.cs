@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using DeploymentAPI.Configuration;
 using DeploymentAPI.Services;
@@ -10,8 +11,29 @@ var builder = WebApplication.CreateBuilder(args);
 // Configuration
 // appsettings.Local.json holds real secrets (GitHub PAT) and is gitignored;
 // it overrides the placeholder values checked into appsettings.json.
+// SETTINGS_FILE_PATH (see SettingsService) redirects this to a mounted
+// persistent volume in deployments where the app's own content root gets
+// wiped and replaced on every redeploy (e.g. Fly.io) — both this and
+// SettingsService must agree on the same path.
 //
-builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+var localSettingsPath = Environment.GetEnvironmentVariable("SETTINGS_FILE_PATH")
+    ?? "appsettings.Local.json";
+
+builder.Configuration.AddJsonFile(localSettingsPath, optional: true, reloadOnChange: true);
+
+// Jwt:Secret has no Settings-page equivalent — it only ever comes from
+// config (appsettings.Local.json, an env var, etc). On a brand new
+// deployment none of those exist yet, and an empty secret isn't just
+// "auth doesn't work" — AddJwtBearer below builds a SymmetricSecurityKey
+// from it, which throws on a zero-length key on literally every request
+// (UseAuthentication runs for every request, not just [Authorize] ones).
+// Falling back to a generated one avoids that; the only cost is that
+// existing sessions need to log in again after a restart, since nothing
+// persists this value anywhere.
+if (string.IsNullOrWhiteSpace(builder.Configuration["Jwt:Secret"]))
+{
+    builder.Configuration["Jwt:Secret"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+}
 
 builder.Services.Configure<GitHubSettings>(
     builder.Configuration.GetSection("GitHub"));

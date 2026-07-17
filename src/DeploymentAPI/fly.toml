@@ -1,0 +1,29 @@
+# Fly.io app config for the DeploymentAPI backend.
+# Before deploying: replace `app` below with a globally-unique name
+# (this becomes your backend URL: https://<app>.fly.dev), or just delete
+# this line and let `fly launch` fill it in for you.
+app = "CHANGE-ME-deployment-portal-api"
+primary_region = "iad"
+
+[build]
+
+[env]
+  ASPNETCORE_ENVIRONMENT = "Production"
+  # Points appsettings.Local.json (and everything SettingsService writes)
+  # at the mounted volume below instead of the app's own filesystem, which
+  # gets replaced on every deploy — see the [[mounts]] section.
+  SETTINGS_FILE_PATH = "/data/appsettings.Local.json"
+
+[[mounts]]
+  source = "deployment_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"

@@ -1,5 +1,6 @@
 import StatusBadge from "../StatusBadge";
 import formatBytes from "../../utils/formatBytes";
+import { API_BASE } from "../../api/apiBase";
 
 function formatInputLabel(name) {
 
@@ -181,7 +182,7 @@ export default function DeploymentSummary({
                                                 <span className="empty-state">Expired</span>
                                             ) : (
                                                 <a
-                                                    href={`/api/github/artifacts/${artifact.id}/download`}
+                                                    href={`${API_BASE}/api/github/artifacts/${artifact.id}/download`}
                                                     className="token-help-link"
                                                 >
                                                     Download →

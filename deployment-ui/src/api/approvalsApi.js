@@ -1,8 +1,10 @@
 import axios from "axios";
+import { API_BASE } from "./apiBase";
 
 const approvalsApi = axios.create({
 
-    baseURL: "/api/approvals"
+    baseURL: `${API_BASE}/api/approvals`,
+    withCredentials: true
 
 });
 

@@ -20,18 +20,28 @@ public class AuthController : ControllerBase
         _oauthOptions = oauthOptions;
     }
 
+    // Local dev serves frontend and backend from the same origin (via the
+    // Vite proxy), so Lax is enough there. A real deployment typically has
+    // the frontend on its own domain (e.g. a static host) talking to the
+    // backend on another (e.g. Fly.io), which makes every API call
+    // cross-site — SameSite=None is required for the browser to attach the
+    // cookie at all in that case, and browsers only honor None when Secure
+    // is also set, which is why this is keyed off Request.IsHttps rather
+    // than being a fixed value.
+    private CookieOptions CrossSiteCookieOptions(DateTimeOffset expires) => new()
+    {
+        HttpOnly = true,
+        SameSite = Request.IsHttps ? SameSiteMode.None : SameSiteMode.Lax,
+        Secure = Request.IsHttps,
+        Expires = expires
+    };
+
     [HttpGet("github/login")]
     public IActionResult Login()
     {
         var state = Guid.NewGuid().ToString("N");
 
-        Response.Cookies.Append("oauth_state", state, new CookieOptions
-        {
-            HttpOnly = true,
-            SameSite = SameSiteMode.Lax,
-            Secure = Request.IsHttps,
-            Expires = DateTimeOffset.UtcNow.AddMinutes(10)
-        });
+        Response.Cookies.Append("oauth_state", state, CrossSiteCookieOptions(DateTimeOffset.UtcNow.AddMinutes(10)));
 
         return Redirect(_auth.BuildAuthorizeUrl(state));
     }
@@ -50,13 +60,7 @@ public class AuthController : ControllerBase
             var (login, role) = await _auth.ExchangeCodeForUserAsync(code);
             var jwt = _auth.IssueJwt(login, role);
 
-            Response.Cookies.Append("portal_token", jwt, new CookieOptions
-            {
-                HttpOnly = true,
-                SameSite = SameSiteMode.Lax,
-                Secure = Request.IsHttps,
-                Expires = DateTimeOffset.UtcNow.AddHours(8)
-            });
+            Response.Cookies.Append("portal_token", jwt, CrossSiteCookieOptions(DateTimeOffset.UtcNow.AddHours(8)));
 
             return Redirect(frontendUrl);
         }
@@ -69,7 +73,13 @@ public class AuthController : ControllerBase
     [HttpPost("logout")]
     public IActionResult Logout()
     {
-        Response.Cookies.Delete("portal_token");
+        Response.Cookies.Delete("portal_token", new CookieOptions
+        {
+            HttpOnly = true,
+            SameSite = Request.IsHttps ? SameSiteMode.None : SameSiteMode.Lax,
+            Secure = Request.IsHttps
+        });
+
         return Ok();
     }
 
