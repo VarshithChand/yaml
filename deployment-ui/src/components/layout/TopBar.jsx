@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import useTheme from "../../hooks/useTheme";
 import useAuth from "../../hooks/useAuth";
@@ -15,8 +15,7 @@ const TABS = [
     { key: "analytics", label: "Analytics" },
     { key: "timeline", label: "Timeline" },
     { key: "history", label: "History" },
-    { key: "templates", label: "Template Tester" },
-    { key: "settings", label: "Settings" }
+    { key: "templates", label: "Template Tester" }
 ];
 
 // The single persistent header: brand, primary nav, and account/theme
@@ -34,10 +33,31 @@ export default function TopBar() {
     const [rateLimit, setRateLimit] = useState(null);
     const [menuOpen, setMenuOpen] = useState(false);
 
+    // Settings lives behind the account name instead of as its own nav
+    // tab — a click opens this small menu (Settings, and Logout when
+    // signed in), closed by clicking anywhere outside it.
+    const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+    const accountMenuRef = useRef(null);
+
     // The Approvals tab only makes sense for someone whose token can
     // actually approve a deployment (repo-admin access) — everyone else
     // never sees it, rather than seeing it and hitting a "no access" wall.
     const visibleTabs = TABS.filter((t) => t.key !== "approvals" || canApproveReleases);
+
+    useEffect(() => {
+
+        if (!accountMenuOpen) return;
+
+        function handleOutsideClick(e) {
+            if (accountMenuRef.current && !accountMenuRef.current.contains(e.target)) {
+                setAccountMenuOpen(false);
+            }
+        }
+
+        document.addEventListener("mousedown", handleOutsideClick);
+        return () => document.removeEventListener("mousedown", handleOutsideClick);
+
+    }, [accountMenuOpen]);
 
     async function loadRateLimit() {
 
@@ -109,17 +129,36 @@ export default function TopBar() {
 
                         user ? (
 
-                            <div className="user-badge">
+                            <div className="user-badge account-menu" ref={accountMenuRef}>
 
-                                <span>{user.login}</span>
+                                <button
+                                    type="button"
+                                    className="account-menu-trigger"
+                                    onClick={() => setAccountMenuOpen((open) => !open)}
+                                    aria-expanded={accountMenuOpen}
+                                >
+                                    <span>{user.login}</span>
 
-                                <span className={`badge ${user.role === "Admin" ? "badge-success" : "badge-secondary"}`}>
-                                    {user.role}
-                                </span>
-
-                                <button className="theme-toggle" onClick={logout}>
-                                    Logout
+                                    <span className={`badge ${user.role === "Admin" ? "badge-success" : "badge-secondary"}`}>
+                                        {user.role}
+                                    </span>
                                 </button>
+
+                                {accountMenuOpen && (
+
+                                    <div className="account-menu-dropdown">
+
+                                        <button onClick={() => { handleTabClick("settings"); setAccountMenuOpen(false); }}>
+                                            Settings
+                                        </button>
+
+                                        <button onClick={() => { logout(); setAccountMenuOpen(false); }}>
+                                            Logout
+                                        </button>
+
+                                    </div>
+
+                                )}
 
                             </div>
 
@@ -148,19 +187,38 @@ export default function TopBar() {
 
                                 {tokenOwner?.configured ? (
 
-                                    <span
-                                        className="badge badge-success"
-                                        title="GitHub Personal Access Token owner — deployments and approvals run as this account"
-                                    >
-                                        {tokenOwner.avatarUrl && (
-                                            <img
-                                                src={tokenOwner.avatarUrl}
-                                                alt=""
-                                                className="token-owner-avatar"
-                                            />
+                                    <div className="account-menu" ref={accountMenuRef}>
+
+                                        <button
+                                            type="button"
+                                            className="badge badge-success account-menu-trigger"
+                                            title="GitHub Personal Access Token owner — deployments and approvals run as this account"
+                                            onClick={() => setAccountMenuOpen((open) => !open)}
+                                            aria-expanded={accountMenuOpen}
+                                        >
+                                            {tokenOwner.avatarUrl && (
+                                                <img
+                                                    src={tokenOwner.avatarUrl}
+                                                    alt=""
+                                                    className="token-owner-avatar"
+                                                />
+                                            )}
+                                            {tokenOwner.login}
+                                        </button>
+
+                                        {accountMenuOpen && (
+
+                                            <div className="account-menu-dropdown">
+
+                                                <button onClick={() => { handleTabClick("settings"); setAccountMenuOpen(false); }}>
+                                                    Settings
+                                                </button>
+
+                                            </div>
+
                                         )}
-                                        {tokenOwner.login}
-                                    </span>
+
+                                    </div>
 
                                 ) : (
 
