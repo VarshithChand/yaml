@@ -2146,3 +2146,17 @@ textarea{
 .workflow-step-more{
     font-style:italic;
 }
+
+.workflow-fix-preview{
+    max-height:220px;
+    overflow:auto;
+    margin:0;
+    padding:12px 14px;
+    background:var(--input-bg);
+    border:1px solid var(--border);
+    border-radius:6px;
+    font-family:monospace;
+    font-size:12.5px;
+    white-space:pre;
+    color:var(--text);
+}

@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 
 import PageLayout from "../components/layout/PageLayout";
 import WorkflowGraph from "../components/templateTester/WorkflowGraph";
-import { parseWorkflowYaml } from "../utils/parseWorkflowYaml";
+import { parseWorkflowYaml, tryFixIndentation } from "../utils/parseWorkflowYaml";
 
 const EXAMPLE_YAML = `name: Example CI/CD
 
@@ -60,35 +60,66 @@ export default function TemplateTester() {
     const [yamlText, setYamlText] = useState("");
     const [graph, setGraph] = useState(null);
     const [error, setError] = useState("");
+    const [suggestedFix, setSuggestedFix] = useState(null);
     const [jobStates, setJobStates] = useState({});
     const [running, setRunning] = useState(false);
 
     // Guards against a stale simulation still updating state after the
-    // user re-clicks Run (or pastes new YAML) mid-animation.
+    // user re-clicks Run (or edits the YAML) mid-animation.
     const runToken = useRef(0);
 
-    function loadExample() {
-        setYamlText(EXAMPLE_YAML);
+    function handleTextChange(value) {
+        setYamlText(value);
         setError("");
+        setSuggestedFix(null);
         setGraph(null);
-        setJobStates({});
     }
 
-    async function handleRun() {
+    function loadExample() {
+        handleTextChange(EXAMPLE_YAML);
+    }
 
-        let parsed;
+    // Validates the given text and returns the parsed graph on success.
+    // On failure it sets the error message and, when the problem looks
+    // like an indentation/whitespace issue rather than a real structural
+    // mistake, a corrected version the user can review and apply — this
+    // is the "ask for adjustment" step before anything is allowed to run.
+    function validate(text) {
 
         try {
-            parsed = parseWorkflowYaml(yamlText);
+            const parsed = parseWorkflowYaml(text);
+            setGraph(parsed);
+            setError("");
+            setSuggestedFix(null);
+            return parsed;
         }
         catch (err) {
+
             setError(err.message);
             setGraph(null);
-            return;
+
+            const fixed = tryFixIndentation(text);
+
+            if (fixed) {
+                try {
+                    parseWorkflowYaml(fixed);
+                    setSuggestedFix(fixed);
+                }
+                catch {
+                    setSuggestedFix(null);
+                }
+            }
+            else {
+                setSuggestedFix(null);
+            }
+
+            return null;
+
         }
 
-        setError("");
-        setGraph(parsed);
+    }
+
+    async function runSimulation(parsed) {
 
         const token = ++runToken.current;
         const initialStates = {};
@@ -133,6 +164,20 @@ export default function TemplateTester() {
 
     }
 
+    // Validate first — only proceeds straight to running when that
+    // succeeds. A validation failure stops here and leaves the error (and
+    // any suggested fix) on screen instead of attempting to run anything.
+    function handleRun() {
+        const parsed = validate(yamlText);
+        if (parsed) runSimulation(parsed);
+    }
+
+    function handleApplyFix() {
+        setYamlText(suggestedFix);
+        const parsed = validate(suggestedFix);
+        if (parsed) runSimulation(parsed);
+    }
+
     return (
 
         <PageLayout title="Template Tester">
@@ -142,17 +187,19 @@ export default function TemplateTester() {
                 <h2 className="card-title">Workflow YAML</h2>
 
                 <p className="empty-state" style={{ padding: "0 0 15px", textAlign: "left" }}>
-                    Paste a GitHub Actions workflow — this parses it locally and plays back the job
-                    graph based on each job's "needs:", entirely in your browser. Nothing here is
-                    sent to GitHub or committed anywhere.
+                    Paste a GitHub Actions workflow or an Azure DevOps pipeline — this validates it
+                    locally, then plays back the job graph based on each job's dependencies ("needs:"
+                    or "dependsOn:"), entirely in your browser. Nothing here is sent to GitHub/Azure
+                    or committed anywhere. Azure "${'{{'} each x in y {'}}'}:" loops are expanded when the
+                    source is a parameter with a static default in the same file.
                 </p>
 
                 <textarea
                     className="form-control"
                     style={{ fontFamily: "monospace", fontSize: "13px", minHeight: "260px", resize: "vertical" }}
                     value={yamlText}
-                    onChange={(e) => setYamlText(e.target.value)}
-                    placeholder="Paste your workflow.yml content here..."
+                    onChange={(e) => handleTextChange(e.target.value)}
+                    placeholder="Paste your workflow.yml or azure-pipelines.yml content here..."
                     spellCheck={false}
                 />
 
@@ -172,6 +219,29 @@ export default function TemplateTester() {
                     <div className="error-message" style={{ marginTop: "15px" }}>
                         {error}
                     </div>
+                )}
+
+                {suggestedFix && (
+
+                    <div className="card" style={{ background: "var(--table-row-hover)", marginTop: "15px" }}>
+
+                        <h3 style={{ marginTop: 0 }}>Suggested fix</h3>
+
+                        <p className="empty-state" style={{ padding: "0 0 10px", textAlign: "left" }}>
+                            This looks like a whitespace problem — tabs or trailing spaces where YAML
+                            expects plain indentation. Here's a corrected version:
+                        </p>
+
+                        <pre className="workflow-fix-preview">{suggestedFix}</pre>
+
+                        <div className="button-row" style={{ marginTop: "10px" }}>
+                            <button className="btn btn-primary" onClick={handleApplyFix}>
+                                Apply fix &amp; run
+                            </button>
+                        </div>
+
+                    </div>
+
                 )}
 
             </div>
