@@ -43,6 +43,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - name: Deploy to production
         run: ./deploy.sh
@@ -55,6 +56,18 @@ function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function defaultParamValues(runParameters) {
+
+    const values = {};
+
+    runParameters.forEach((param) => {
+        values[param.name] = param.type === "boolean" ? !!param.default : (param.default ?? "");
+    });
+
+    return values;
+
+}
+
 export default function TemplateTester() {
 
     const [yamlText, setYamlText] = useState("");
@@ -64,15 +77,25 @@ export default function TemplateTester() {
     const [jobStates, setJobStates] = useState({});
     const [running, setRunning] = useState(false);
 
+    // Set while a parsed pipeline has run parameters that need to be
+    // picked before starting — mirrors Azure DevOps' own "Run pipeline"
+    // dialog. { parsed, values } while open, null otherwise.
+    const [paramDialog, setParamDialog] = useState(null);
+
     // Guards against a stale simulation still updating state after the
     // user re-clicks Run (or edits the YAML) mid-animation.
     const runToken = useRef(0);
+
+    // jobId -> resolve function, for jobs currently paused at a GitHub
+    // "environment:" approval gate mid-run.
+    const pendingApprovals = useRef({});
 
     function handleTextChange(value) {
         setYamlText(value);
         setError("");
         setSuggestedFix(null);
         setGraph(null);
+        setParamDialog(null);
     }
 
     function loadExample() {
@@ -119,11 +142,130 @@ export default function TemplateTester() {
 
     }
 
-    async function runSimulation(parsed) {
+    // A pipeline with run parameters (Azure's boolean/string prompts)
+    // pauses here for the user to set them, same as Azure's own "Run
+    // pipeline" panel appears before anything starts — jobs whose
+    // condition doesn't reference a checked parameter are skipped rather
+    // than run. A pipeline with none goes straight to running.
+    function proceedAfterValidate(parsed) {
+
+        if (!parsed) return;
+
+        if (parsed.runParameters.length > 0) {
+            setParamDialog({ parsed, values: defaultParamValues(parsed.runParameters) });
+            return;
+        }
+
+        runSimulation(parsed, {});
+
+    }
+
+    function handleRun() {
+        proceedAfterValidate(validate(yamlText));
+    }
+
+    function handleApplyFix() {
+        setYamlText(suggestedFix);
+        proceedAfterValidate(validate(suggestedFix));
+    }
+
+    function updateParamValue(name, value) {
+        setParamDialog((prev) => prev && ({ ...prev, values: { ...prev.values, [name]: value } }));
+    }
+
+    function startWithParams() {
+        const { parsed, values } = paramDialog;
+        setParamDialog(null);
+        runSimulation(parsed, values);
+    }
+
+    function waitForApproval(jobId) {
+        return new Promise((resolve) => {
+            pendingApprovals.current[jobId] = resolve;
+        });
+    }
+
+    function handleApprovalDecision(jobId, approved) {
+        const resolve = pendingApprovals.current[jobId];
+        if (!resolve) return;
+        delete pendingApprovals.current[jobId];
+        resolve(approved);
+    }
+
+    async function runJob(job, paramValues, statuses, token) {
+
+        // A job downstream of a skipped/rejected dependency doesn't run
+        // either — same as a real pipeline wouldn't attempt a deploy job
+        // whose build job never happened.
+        if (job.needs.some((dep) => statuses[dep] === "skipped")) {
+            statuses[job.id] = "skipped";
+            setJobStates((prev) => ({ ...prev, [job.id]: { status: "skipped", stepIndex: -1 } }));
+            return;
+        }
+
+        // Azure run-parameter gate: skip unless at least one referenced
+        // parameter was checked in the Run dialog.
+        if (job.referencedParams.length > 0) {
+
+            const included = job.referencedParams.some((name) => paramValues[name] === true);
+
+            if (!included) {
+                statuses[job.id] = "skipped";
+                setJobStates((prev) => ({ ...prev, [job.id]: { status: "skipped", stepIndex: -1 } }));
+                return;
+            }
+
+        }
+
+        // GitHub environment gate: pause mid-run for a fake Approve/Reject,
+        // same point in the flow a real required-reviewer gate would pause.
+        if (job.environment) {
+
+            setJobStates((prev) => ({ ...prev, [job.id]: { status: "waiting_approval", stepIndex: -1 } }));
+
+            const approved = await waitForApproval(job.id);
+            if (runToken.current !== token) return;
+
+            if (!approved) {
+                statuses[job.id] = "skipped";
+                setJobStates((prev) => ({ ...prev, [job.id]: { status: "skipped", stepIndex: -1 } }));
+                return;
+            }
+
+        }
+
+        setJobStates((prev) => ({ ...prev, [job.id]: { status: "running", stepIndex: -1 } }));
+
+        const stepCount = Math.max(job.steps.length, 1);
+
+        for (let i = 0; i < stepCount; i++) {
+
+            await sleep(STEP_MS);
+            if (runToken.current !== token) return;
+
+            setJobStates((prev) => ({ ...prev, [job.id]: { status: "running", stepIndex: i } }));
+
+        }
+
+        await sleep(JOB_SETTLE_MS);
+        if (runToken.current !== token) return;
+
+        statuses[job.id] = "success";
+        setJobStates((prev) => ({ ...prev, [job.id]: { status: "success", stepIndex: stepCount - 1 } }));
+
+    }
+
+    async function runSimulation(parsed, paramValues) {
 
         const token = ++runToken.current;
+        const statuses = {};
         const initialStates = {};
-        parsed.jobs.forEach((job) => { initialStates[job.id] = { status: "pending", stepIndex: -1 }; });
+
+        parsed.jobs.forEach((job) => {
+            initialStates[job.id] = { status: "pending", stepIndex: -1 };
+            statuses[job.id] = "pending";
+        });
+
         setJobStates(initialStates);
         setRunning(true);
 
@@ -131,51 +273,15 @@ export default function TemplateTester() {
 
             if (runToken.current !== token) return;
 
-            setJobStates((prev) => {
-                const next = { ...prev };
-                layer.forEach((id) => { next[id] = { status: "running", stepIndex: -1 }; });
-                return next;
-            });
-
-            await Promise.all(layer.map(async (id) => {
-
+            await Promise.all(layer.map((id) => {
                 const job = parsed.jobs.find((j) => j.id === id);
-                const stepCount = Math.max(job.steps.length, 1);
-
-                for (let i = 0; i < stepCount; i++) {
-
-                    await sleep(STEP_MS);
-                    if (runToken.current !== token) return;
-
-                    setJobStates((prev) => ({ ...prev, [id]: { status: "running", stepIndex: i } }));
-
-                }
-
-                await sleep(JOB_SETTLE_MS);
-                if (runToken.current !== token) return;
-
-                setJobStates((prev) => ({ ...prev, [id]: { status: "success", stepIndex: stepCount - 1 } }));
-
+                return runJob(job, paramValues, statuses, token);
             }));
 
         }
 
         if (runToken.current === token) setRunning(false);
 
-    }
-
-    // Validate first — only proceeds straight to running when that
-    // succeeds. A validation failure stops here and leaves the error (and
-    // any suggested fix) on screen instead of attempting to run anything.
-    function handleRun() {
-        const parsed = validate(yamlText);
-        if (parsed) runSimulation(parsed);
-    }
-
-    function handleApplyFix() {
-        setYamlText(suggestedFix);
-        const parsed = validate(suggestedFix);
-        if (parsed) runSimulation(parsed);
     }
 
     return (
@@ -190,8 +296,9 @@ export default function TemplateTester() {
                     Paste a GitHub Actions workflow or an Azure DevOps pipeline — this validates it
                     locally, then plays back the job graph based on each job's dependencies ("needs:"
                     or "dependsOn:"), entirely in your browser. Nothing here is sent to GitHub/Azure
-                    or committed anywhere. Azure "${'{{'} each x in y {'}}'}:" loops are expanded when the
-                    source is a parameter with a static default in the same file.
+                    or committed anywhere. A GitHub job with an "environment:" pauses for a fake
+                    approval mid-run; an Azure pipeline with run parameters asks for them first,
+                    just like each platform's own manual-run prompt.
                 </p>
 
                 <textarea
@@ -246,13 +353,78 @@ export default function TemplateTester() {
 
             </div>
 
-            {graph && (
+            {paramDialog && (
+
+                <div className="card">
+
+                    <h2 className="card-title">Run this pipeline</h2>
+
+                    <p className="empty-state" style={{ padding: "0 0 15px", textAlign: "left" }}>
+                        This pipeline takes run parameters — set them the way you would in Azure
+                        DevOps' own "Run pipeline" panel. Jobs whose condition doesn't reference a
+                        checked parameter will show as skipped instead of running.
+                    </p>
+
+                    {paramDialog.parsed.runParameters.map((param) => (
+
+                        param.type === "boolean" ? (
+
+                            <label key={param.name} className="checkbox-list-item">
+
+                                <input
+                                    type="checkbox"
+                                    checked={!!paramDialog.values[param.name]}
+                                    onChange={(e) => updateParamValue(param.name, e.target.checked)}
+                                />
+                                {" "}
+                                {param.displayName}
+
+                            </label>
+
+                        ) : (
+
+                            <div key={param.name} className="form-group">
+                                <label>{param.displayName}</label>
+                                <input
+                                    className="form-control"
+                                    value={paramDialog.values[param.name]}
+                                    onChange={(e) => updateParamValue(param.name, e.target.value)}
+                                />
+                            </div>
+
+                        )
+
+                    ))}
+
+                    <div className="button-row" style={{ marginTop: "15px" }}>
+
+                        <button className="btn btn-primary" onClick={startWithParams}>
+                            Run
+                        </button>
+
+                        <button className="btn btn-secondary" onClick={() => setParamDialog(null)}>
+                            Cancel
+                        </button>
+
+                    </div>
+
+                </div>
+
+            )}
+
+            {graph && !paramDialog && (
 
                 <div className="card">
 
                     <h2 className="card-title">{graph.name || "Pipeline"}</h2>
 
-                    <WorkflowGraph jobs={graph.jobs} layers={graph.layers} jobStates={jobStates} />
+                    <WorkflowGraph
+                        jobs={graph.jobs}
+                        layers={graph.layers}
+                        jobStates={jobStates}
+                        onApprove={(jobId) => handleApprovalDecision(jobId, true)}
+                        onReject={(jobId) => handleApprovalDecision(jobId, false)}
+                    />
 
                 </div>
 

@@ -89,7 +89,11 @@ export function parseWorkflowYaml(yamlText) {
     return {
         name: doc.name || "",
         jobs,
-        layers
+        layers,
+        // Azure boolean/string parameters, shown as a "Run this pipeline"
+        // picker before starting — mirrors Azure's own pre-run parameter
+        // dialog. Empty for GitHub Actions workflows.
+        runParameters: flavor === "github" ? [] : resolveRunParameters(doc)
     };
 
 }
@@ -138,12 +142,21 @@ function extractGitHubJobs(doc) {
             ? raw.steps.map((step, index) => ({ name: githubStepLabel(step, index) }))
             : [];
 
+        // A job targeting an environment with required reviewers pauses
+        // for approval on real GitHub — this is what the simulated Run
+        // stops for, same as it stops for Azure's own run parameters.
+        const environment = typeof raw.environment === "string"
+            ? raw.environment
+            : (raw.environment && typeof raw.environment === "object" ? raw.environment.name : null);
+
         return {
             id,
             name: raw.name || id,
             needs,
             runsOn: Array.isArray(raw["runs-on"]) ? raw["runs-on"].join(", ") : (raw["runs-on"] || ""),
-            steps
+            steps,
+            environment: environment || null,
+            referencedParams: []
         };
 
     });
@@ -242,8 +255,35 @@ function normalizeAzureJob(raw, implicitNeeds) {
         name: raw.displayName || id,
         needs,
         runsOn: raw.pool?.vmImage || raw.pool?.name || "",
-        steps
+        steps,
+        environment: null,
+        referencedParams: extractReferencedParams(raw.condition)
     };
+
+}
+
+// Full evaluation of Azure's condition expression language (and/or/eq,
+// runtime variables, dependency outputs) isn't something a static preview
+// can do faithfully — there's no real git history or prior job output to
+// check against. Instead this extracts which boolean run parameters a
+// job's condition mentions, so the simulated run can ask about exactly
+// those via the same checkbox picker Azure itself shows before a manual
+// run, and skip the job if none of them end up checked.
+function extractReferencedParams(conditionText) {
+
+    if (typeof conditionText !== "string") return [];
+
+    const names = new Set();
+
+    for (const match of conditionText.matchAll(/\{\{param:(\w+)\}\}/g)) {
+        names.add(match[1]);
+    }
+
+    for (const match of conditionText.matchAll(/\$\{\{\s*parameters\.(\w+)\s*\}\}/g)) {
+        names.add(match[1]);
+    }
+
+    return [...names];
 
 }
 
@@ -281,6 +321,24 @@ function azureStepLabel(step, index) {
 //===========================================================
 
 const EACH_LOOP_KEY = /^\$\{\{\s*each\s+(\w+)\s+in\s+([\w.]+)\s*\}\}$/;
+
+// Only boolean/string/number parameters make sense as something a person
+// picks in a dialog before running — "projects" (an object/list, used only
+// as a template-loop source) isn't something to prompt for.
+function resolveRunParameters(doc) {
+
+    if (!Array.isArray(doc.parameters)) return [];
+
+    return doc.parameters
+        .filter((param) => param && ["boolean", "string", "number"].includes(param.type))
+        .map((param) => ({
+            name: param.name,
+            displayName: param.displayName || param.name,
+            type: param.type,
+            default: param.default
+        }));
+
+}
 
 function resolveParametersMap(doc) {
 
@@ -322,6 +380,16 @@ function resolveLoopExpr(expr, loopVar, item) {
 function substituteLoopVars(text, loopVar, item) {
 
     return text
+        // parameters[format('build_{0}', project.name)] — a dynamic
+        // parameter-name lookup, common in per-item conditions. The name
+        // itself ("build_Admin") is knowable now (project.name is), but
+        // its VALUE is only chosen later when the user runs the pipeline
+        // — so this resolves to a {{param:build_Admin}} marker rather
+        // than a value, for extractReferencedParams to pick up.
+        .replace(/\$\{\{\s*parameters\[\s*format\(\s*'([^']*)'\s*,\s*([\w.]+)\s*\)\s*\]\s*\}\}/g, (match, fmt, expr) => {
+            const value = resolveLoopExpr(expr, loopVar, item);
+            return value === undefined ? match : `{{param:${fmt.replace("{0}", String(value))}}}`;
+        })
         .replace(/\$\{\{\s*upper\(\s*([\w.]+)\s*\)\s*\}\}/g, (match, expr) => {
             const value = resolveLoopExpr(expr, loopVar, item);
             return value === undefined ? match : String(value).toUpperCase();

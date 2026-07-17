@@ -1,5 +1,5 @@
 const NODE_WIDTH = 240;
-const NODE_HEIGHT = 168;
+const NODE_HEIGHT = 184;
 const COL_GAP = 90;
 const ROW_GAP = 36;
 const MAX_VISIBLE_STEPS = 5;
@@ -51,12 +51,14 @@ function statusDotClass(status) {
     switch (status) {
         case "running": return "workflow-dot workflow-dot-running";
         case "success": return "workflow-dot workflow-dot-success";
+        case "waiting_approval": return "workflow-dot workflow-dot-waiting";
+        case "skipped": return "workflow-dot workflow-dot-skipped";
         default: return "workflow-dot workflow-dot-pending";
     }
 
 }
 
-export default function WorkflowGraph({ jobs, layers, jobStates }) {
+export default function WorkflowGraph({ jobs, layers, jobStates, onApprove, onReject }) {
 
     const { positions, width, height } = layoutNodes(layers);
 
@@ -112,33 +114,67 @@ export default function WorkflowGraph({ jobs, layers, jobStates }) {
                                 <div className="workflow-node-runson">{job.runsOn}</div>
                             )}
 
-                            <ul className="workflow-node-steps">
+                            {state.status === "waiting_approval" ? (
 
-                                {visibleSteps.map((step, index) => {
+                                <div className="workflow-approval-gate">
 
-                                    const done = state.status === "success" || (state.status === "running" && index < state.stepIndex);
-                                    const active = state.status === "running" && index === state.stepIndex;
+                                    <p>
+                                        Waiting for approval
+                                        {job.environment && <> — environment <strong>{job.environment}</strong></>}
+                                    </p>
 
-                                    return (
-                                        <li
-                                            key={index}
-                                            className={done ? "workflow-step-done" : active ? "workflow-step-active" : ""}
-                                        >
-                                            {step.name}
-                                        </li>
-                                    );
+                                    <div className="button-row">
 
-                                })}
+                                        <button className="btn btn-success" onClick={() => onApprove(job.id)}>
+                                            Approve
+                                        </button>
 
-                                {hiddenCount > 0 && (
-                                    <li className="workflow-step-more">+{hiddenCount} more</li>
-                                )}
+                                        <button className="btn btn-danger" onClick={() => onReject(job.id)}>
+                                            Reject
+                                        </button>
 
-                                {job.steps.length === 0 && (
-                                    <li className="workflow-step-more">No steps defined</li>
-                                )}
+                                    </div>
 
-                            </ul>
+                                </div>
+
+                            ) : state.status === "skipped" ? (
+
+                                <p className="workflow-skipped-note">
+                                    Skipped
+                                    {job.referencedParams.length > 0 && " — no matching run parameter was checked"}
+                                </p>
+
+                            ) : (
+
+                                <ul className="workflow-node-steps">
+
+                                    {visibleSteps.map((step, index) => {
+
+                                        const done = state.status === "success" || (state.status === "running" && index < state.stepIndex);
+                                        const active = state.status === "running" && index === state.stepIndex;
+
+                                        return (
+                                            <li
+                                                key={index}
+                                                className={done ? "workflow-step-done" : active ? "workflow-step-active" : ""}
+                                            >
+                                                {step.name}
+                                            </li>
+                                        );
+
+                                    })}
+
+                                    {hiddenCount > 0 && (
+                                        <li className="workflow-step-more">+{hiddenCount} more</li>
+                                    )}
+
+                                    {job.steps.length === 0 && (
+                                        <li className="workflow-step-more">No steps defined</li>
+                                    )}
+
+                                </ul>
+
+                            )}
 
                         </div>
 
