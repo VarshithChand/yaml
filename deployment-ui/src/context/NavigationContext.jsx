@@ -1,6 +1,6 @@
 import { createContext, useCallback, useState } from "react";
 
-const TABS = ["dashboard", "deploy", "approvals", "storage", "analytics", "timeline", "history", "settings"];
+const TABS = ["dashboard", "deploy", "approvals", "storage", "analytics", "timeline", "history", "templates", "settings"];
 
 // Read the starting tab from the URL so a hard reload (or a bookmarked/
 // shared link) lands back on the same page instead of always resetting

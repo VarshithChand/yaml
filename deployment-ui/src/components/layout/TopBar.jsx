@@ -15,6 +15,7 @@ const TABS = [
     { key: "analytics", label: "Analytics" },
     { key: "timeline", label: "Timeline" },
     { key: "history", label: "History" },
+    { key: "templates", label: "Template Tester" },
     { key: "settings", label: "Settings" }
 ];
 
