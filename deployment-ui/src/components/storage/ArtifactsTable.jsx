@@ -4,6 +4,8 @@ import formatBytes from "../../utils/formatBytes";
 import useAuth from "../../hooks/useAuth";
 import useNavigation from "../../hooks/useNavigation";
 import useToast from "../../hooks/useToast";
+import usePagination from "../../hooks/usePagination";
+import Pagination from "../common/Pagination";
 import { API_BASE } from "../../api/apiBase";
 
 export default function ArtifactsTable({ artifacts = [], owner, repository, onDelete, deletingId }) {
@@ -13,6 +15,7 @@ export default function ArtifactsTable({ artifacts = [], owner, repository, onDe
     const toast = useToast();
 
     const [expandedId, setExpandedId] = useState(null);
+    const { page, setPage, pageCount, pageItems, totalCount, startIndex, endIndex } = usePagination(artifacts, 10);
 
     function handleDeleteClick(artifact) {
 
@@ -76,7 +79,7 @@ export default function ArtifactsTable({ artifacts = [], owner, repository, onDe
 
                     <tbody>
 
-                        {artifacts.map((artifact) => (
+                        {pageItems.map((artifact) => (
 
                             <Fragment key={artifact.id}>
 
@@ -177,6 +180,15 @@ export default function ArtifactsTable({ artifacts = [], owner, repository, onDe
                 </div>
 
             )}
+
+            <Pagination
+                page={page}
+                pageCount={pageCount}
+                totalCount={totalCount}
+                startIndex={startIndex}
+                endIndex={endIndex}
+                onPageChange={setPage}
+            />
 
         </div>
 

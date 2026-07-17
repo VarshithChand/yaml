@@ -1,4 +1,9 @@
+import usePagination from "../../hooks/usePagination";
+import Pagination from "../common/Pagination";
+
 export default function DockerImagesTable({ images = [], owner }) {
+
+    const { page, setPage, pageCount, pageItems, totalCount, startIndex, endIndex } = usePagination(images, 10);
 
     return (
 
@@ -43,7 +48,7 @@ export default function DockerImagesTable({ images = [], owner }) {
 
                     <tbody>
 
-                        {images.map((image) => (
+                        {pageItems.map((image) => (
 
                             <tr key={image.name}>
 
@@ -84,6 +89,15 @@ export default function DockerImagesTable({ images = [], owner }) {
                 </div>
 
             )}
+
+            <Pagination
+                page={page}
+                pageCount={pageCount}
+                totalCount={totalCount}
+                startIndex={startIndex}
+                endIndex={endIndex}
+                onPageChange={setPage}
+            />
 
         </div>
 

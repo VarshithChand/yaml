@@ -1,6 +1,11 @@
 import StatusBadge from "./StatusBadge";
+import usePagination from "../hooks/usePagination";
+import Pagination from "./common/Pagination";
 
 export default function HistoryTable({ runs = [] }) {
+
+    const safeRuns = Array.isArray(runs) ? runs : [];
+    const { page, setPage, pageCount, pageItems, totalCount, startIndex, endIndex } = usePagination(safeRuns, 15);
 
     return (
 
@@ -34,7 +39,7 @@ export default function HistoryTable({ runs = [] }) {
 
                 <tbody>
 
-                    {(Array.isArray(runs) ? runs : []).map((run) => (
+                    {pageItems.map((run) => (
 
                         <tr key={run.id}>
 
@@ -69,6 +74,15 @@ export default function HistoryTable({ runs = [] }) {
             </table>
 
             </div>
+
+            <Pagination
+                page={page}
+                pageCount={pageCount}
+                totalCount={totalCount}
+                startIndex={startIndex}
+                endIndex={endIndex}
+                onPageChange={setPage}
+            />
 
         </div>
 

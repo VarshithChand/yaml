@@ -76,6 +76,7 @@
 
 h1, h2, h3, .card-title, .page-title, .page-header h1, .stat-tile-value{
     font-family:'Lexend','Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+    line-height:1.25;
 }
 
 body{
@@ -83,6 +84,8 @@ body{
     color:var(--text);
     overflow-x:hidden;
     transition:background .2s ease, color .2s ease;
+    font-size:16px;
+    line-height:1.5;
 }
 
 a{
@@ -2221,4 +2224,41 @@ textarea{
     font-size:12.5px;
     white-space:pre;
     color:var(--text);
+}
+
+/* ==========================================
+   PAGINATION
+========================================== */
+
+.pagination{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:12px;
+    margin-top:16px;
+    padding-top:16px;
+    border-top:1px solid var(--border);
+}
+
+.pagination-info{
+    font-size:13px;
+    color:var(--text-muted);
+}
+
+.pagination-controls{
+    display:flex;
+    align-items:center;
+    gap:12px;
+}
+
+.pagination-page{
+    font-size:13px;
+    color:var(--text-muted);
+    white-space:nowrap;
+}
+
+.pagination .btn{
+    padding:6px 14px;
+    font-size:13px;
 }
