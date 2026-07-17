@@ -309,6 +309,14 @@ function normalizeAzureJob(raw, implicitNeeds, stageName) {
 
     if (!raw || typeof raw !== "object") return null;
 
+    // "- template: some-job.yml" + parameters: pulls a job in from another
+    // file this preview never sees, so there's no real job/deployment id
+    // or step list to read — normalizeTemplateRefJob approximates both
+    // from whatever's recognizable in the template call itself.
+    if (!raw.job && !raw.deployment && !raw.name && raw.template) {
+        return normalizeTemplateRefJob(raw, implicitNeeds, stageName);
+    }
+
     const bareId = raw.job || raw.deployment || raw.name;
     if (!bareId) return null;
 
@@ -343,6 +351,43 @@ function normalizeAzureJob(raw, implicitNeeds, stageName) {
         runsOn: raw.pool?.vmImage || raw.pool?.name || "",
         steps,
         environment: environment || null,
+        referencedParams: extractReferencedParams(raw.condition)
+    };
+
+}
+
+// Best-effort stand-in for a job pulled in via "- template: path.yml" +
+// parameters: — there's no way to know that file's real job id, steps, or
+// whether it has its own environment gate, since it's a separate file
+// this preview never reads. Falls back to whichever parameter looks like
+// it identifies what's being deployed (the common "projectName"/"name"
+// convention for a per-item deploy template), so same-template calls in
+// an each-loop still end up as distinct, correctly-named nodes instead of
+// colliding into one.
+function normalizeTemplateRefJob(raw, implicitNeeds, stageName) {
+
+    const params = (raw.parameters && typeof raw.parameters === "object") ? raw.parameters : {};
+    const label = params.projectName || params.name || params.displayName;
+    const bareId = label ? `${raw.template}::${label}` : `${raw.template}::${JSON.stringify(params)}`;
+    const id = stageName ? `${stageName}::${bareId}` : bareId;
+
+    const hasDependsOn = Object.prototype.hasOwnProperty.call(raw, "dependsOn");
+
+    const needs = hasDependsOn
+        ? (Array.isArray(raw.dependsOn) ? raw.dependsOn : [raw.dependsOn])
+            .filter(Boolean)
+            .map((dep) => (stageName ? `${stageName}::${dep}` : dep))
+        : (implicitNeeds || []);
+
+    const suffix = typeof params.displayNameSuffix === "string" ? ` ${params.displayNameSuffix}` : "";
+
+    return {
+        id,
+        name: label ? `${label}${suffix}` : raw.template,
+        needs,
+        runsOn: "",
+        steps: [{ name: `Template: ${raw.template} (steps not visible — defined in another file)` }],
+        environment: typeof params.environmentName === "string" ? params.environmentName : null,
         referencedParams: extractReferencedParams(raw.condition)
     };
 
@@ -518,6 +563,29 @@ function deepSubstitute(node, loopVar, item) {
 // nested inside "${{ each project }}: ${{ if ...deploy_{project} }}:"
 // ends up with exactly the same skip behavior as one with a plain
 // "condition: eq('${{ parameters.deploy_X }}', 'True')" field.
+// Unlike a parameter checkbox (only known once the user runs the
+// pipeline), "in(project.name, 'A', 'B', 'C')" is fully decidable right
+// now — it only depends on which loop item this particular expansion is
+// for. Returns true when the condition definitively excludes this item,
+// so it can be dropped from the graph entirely instead of shown as a
+// skippable job that could never actually run.
+function isStaticallyExcluded(conditionText, loopVar, loopItem) {
+
+    if (!loopVar || !loopItem) return false;
+
+    const match = conditionText.match(new RegExp(`\\bin\\(\\s*${loopVar}\\.(\\w+)\\s*,\\s*([^)]+)\\)`));
+    if (!match) return false;
+
+    const [, field, rawValues] = match;
+    const actual = loopItem[field];
+    if (actual === undefined) return false;
+
+    const allowed = rawValues.split(",").map((v) => v.trim().replace(/^'(.*)'$/, "$1"));
+
+    return !allowed.includes(String(actual));
+
+}
+
 function resolveIfConditionRefs(conditionText, loopVar, loopItem) {
 
     return conditionText
@@ -573,6 +641,10 @@ function expandEachLoops(node, doc, paramsMap, loopVar = null, loopItem = null) 
 
             }
             else if (ifMatch) {
+
+                if (isStaticallyExcluded(ifMatch[1], loopVar, loopItem)) {
+                    continue;
+                }
 
                 const conditionText = resolveIfConditionRefs(ifMatch[1], loopVar, loopItem);
                 const body = entry[soleKey];
