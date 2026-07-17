@@ -407,6 +407,7 @@ function azureStepLabel(step, index) {
 //===========================================================
 
 const EACH_LOOP_KEY = /^\$\{\{\s*each\s+(\w+)\s+in\s+([\w.]+)\s*\}\}$/;
+const IF_BLOCK_KEY = /^\$\{\{\s*if\s+(.+)\s*\}\}$/;
 
 // Only boolean/string/number parameters make sense as something a person
 // picks in a dialog before running — "projects" (an object/list, used only
@@ -506,7 +507,33 @@ function deepSubstitute(node, loopVar, item) {
 
 }
 
-function expandEachLoops(node, doc, paramsMap) {
+// A "${{ if <condition> }}:" block conditionally includes its body on a
+// real run — but the condition is only decidable once the user actually
+// picks run parameter values, which happens later (the Run dialog), not
+// while parsing. So this always includes the body (same "show it, let
+// the run decide" approach as an ordinary job's "condition:" field) and
+// instead resolves any parameter references in the condition text into
+// {{param:name}} markers, attached onto each resulting job/stage so the
+// existing referencedParams skip mechanism picks them up too — a job
+// nested inside "${{ each project }}: ${{ if ...deploy_{project} }}:"
+// ends up with exactly the same skip behavior as one with a plain
+// "condition: eq('${{ parameters.deploy_X }}', 'True')" field.
+function resolveIfConditionRefs(conditionText, loopVar, loopItem) {
+
+    return conditionText
+        .replace(/parameters\[\s*format\(\s*'([^']*)'\s*,\s*([\w.]+)\s*\)\s*\]/g, (match, fmt, expr) => {
+            const value = loopVar ? resolveLoopExpr(expr, loopVar, loopItem) : undefined;
+            return value === undefined ? match : `{{param:${fmt.replace("{0}", String(value))}}}`;
+        })
+        .replace(/parameters\.(\w+)/g, (match, name) => `{{param:${name}}}`);
+
+}
+
+// loopVar/loopItem carry the enclosing each-loop's binding (if any) down
+// into nested "${{ if }}:" blocks, which commonly sit directly inside an
+// each-loop's body and reference the loop item in their condition (e.g.
+// "${{ if eq(parameters[format('deploy_{0}', project.name)], true) }}").
+function expandEachLoops(node, doc, paramsMap, loopVar = null, loopItem = null) {
 
     if (Array.isArray(node)) {
 
@@ -514,23 +541,26 @@ function expandEachLoops(node, doc, paramsMap) {
 
         for (const entry of node) {
 
-            const loopMatch = entry && typeof entry === "object" && !Array.isArray(entry) && Object.keys(entry).length === 1
-                ? Object.keys(entry)[0].match(EACH_LOOP_KEY)
+            const soleKey = entry && typeof entry === "object" && !Array.isArray(entry) && Object.keys(entry).length === 1
+                ? Object.keys(entry)[0]
                 : null;
 
-            if (loopMatch) {
+            const eachMatch = soleKey ? soleKey.match(EACH_LOOP_KEY) : null;
+            const ifMatch = !eachMatch && soleKey ? soleKey.match(IF_BLOCK_KEY) : null;
 
-                const [, loopVar, path] = loopMatch;
+            if (eachMatch) {
+
+                const [, newLoopVar, path] = eachMatch;
                 const source = resolveLoopSource(path, paramsMap);
 
                 if (Array.isArray(source)) {
 
-                    const body = entry[Object.keys(entry)[0]];
+                    const body = entry[soleKey];
 
                     source.forEach((sourceItem) => {
 
-                        const substituted = deepSubstitute(body, loopVar, sourceItem);
-                        const expanded = expandEachLoops(substituted, doc, paramsMap);
+                        const substituted = deepSubstitute(body, newLoopVar, sourceItem);
+                        const expanded = expandEachLoops(substituted, doc, paramsMap, newLoopVar, sourceItem);
 
                         if (Array.isArray(expanded)) result.push(...expanded);
                         else result.push(expanded);
@@ -542,8 +572,28 @@ function expandEachLoops(node, doc, paramsMap) {
                 }
 
             }
+            else if (ifMatch) {
 
-            result.push(expandEachLoops(entry, doc, paramsMap));
+                const conditionText = resolveIfConditionRefs(ifMatch[1], loopVar, loopItem);
+                const body = entry[soleKey];
+                const expanded = expandEachLoops(body, doc, paramsMap, loopVar, loopItem);
+                const bodyArray = Array.isArray(expanded) ? expanded : [expanded];
+
+                bodyArray.forEach((item) => {
+
+                    if (item && typeof item === "object" && !Array.isArray(item)) {
+                        item.condition = item.condition ? `${item.condition} ${conditionText}` : conditionText;
+                    }
+
+                    result.push(item);
+
+                });
+
+                continue;
+
+            }
+
+            result.push(expandEachLoops(entry, doc, paramsMap, loopVar, loopItem));
 
         }
 
@@ -554,7 +604,7 @@ function expandEachLoops(node, doc, paramsMap) {
     if (node && typeof node === "object") {
         const out = {};
         for (const [key, value] of Object.entries(node)) {
-            out[key] = expandEachLoops(value, doc, paramsMap);
+            out[key] = expandEachLoops(value, doc, paramsMap, loopVar, loopItem);
         }
         return out;
     }
