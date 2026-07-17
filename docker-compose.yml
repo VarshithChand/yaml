@@ -5,13 +5,22 @@ services:
       dockerfile: Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      # Redirects both config loading and Settings-page writes at the
+      # mounted volume below instead of the app's own /app directory —
+      # bind-mounting appsettings.Local.json directly as a *file* is the
+      # classic Docker gotcha: that file is gitignored, so it doesn't
+      # exist on a fresh clone, and Docker silently creates a *directory*
+      # in its place instead, breaking the container. Mounting a
+      # directory has no such trap — Docker creates missing directories
+      # safely.
+      SETTINGS_FILE_PATH: /data/appsettings.Local.json
       GitHub__Owner: ${GITHUB_OWNER}
       GitHub__Repository: ${GITHUB_REPOSITORY}
       GitHub__PersonalAccessToken: ${GITHUB_PAT}
     volumes:
-      # Settings saved via the Settings page (PAT, Docker creds, OAuth app,
-      # admin allowlist) live here — bind-mount so they survive a rebuild.
-      - ./src/DeploymentAPI/appsettings.Local.json:/app/appsettings.Local.json
+      - ./src/DeploymentAPI/data:/data
+    networks:
+      - portal-network
     expose:
       - "8080"
     restart: unless-stopped
@@ -23,5 +32,17 @@ services:
     ports:
       - "8081:80"
     depends_on:
-      - deployment-api
+      # Waits for the backend's HEALTHCHECK (see src/DeploymentAPI/Dockerfile)
+      # to actually pass, not just for the container to start — otherwise
+      # nginx can come up and start proxying /api/* to a backend that
+      # hasn't finished starting Kestrel yet, which reads as "missing
+      # data" (empty branches/artifacts/workflows) on a fresh `up`.
+      deployment-api:
+        condition: service_healthy
+    networks:
+      - portal-network
     restart: unless-stopped
+
+networks:
+  portal-network:
+    driver: bridge

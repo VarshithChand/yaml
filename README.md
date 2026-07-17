@@ -129,9 +129,12 @@ Then build and start both containers:
 docker compose up --build
 ```
 
-Frontend on **http://localhost:8081**, backend on `http://localhost:8080` (internal only).
-Settings saved through the UI persist in the bind-mounted
-`src/DeploymentAPI/appsettings.Local.json`, so they survive a rebuild.
+Frontend on **http://localhost:8081**, backend on `http://localhost:8080` (internal only) —
+both containers sit on the same `portal-network` Docker network and reach each other by
+service name (nginx proxies `/api/*` to `http://deployment-api:8080`). The frontend waits
+for the backend's healthcheck to actually pass before it starts serving, so there's no
+race where it comes up before the API is ready to answer. Settings saved through the UI
+persist in the bind-mounted `src/DeploymentAPI/data/` directory, so they survive a rebuild.
 
 ---
 
