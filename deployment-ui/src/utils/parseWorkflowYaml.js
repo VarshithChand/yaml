@@ -90,11 +90,61 @@ export function parseWorkflowYaml(yamlText) {
         name: doc.name || "",
         jobs,
         layers,
-        // Azure boolean/string parameters, shown as a "Run this pipeline"
-        // picker before starting — mirrors Azure's own pre-run parameter
-        // dialog. Empty for GitHub Actions workflows.
-        runParameters: flavor === "github" ? [] : resolveRunParameters(doc)
+        // Shown as a "Run this pipeline" picker before starting — mirrors
+        // GitHub's "Run workflow" panel (workflow_dispatch inputs) and
+        // Azure's own pre-run parameter dialog.
+        runParameters: flavor === "github" ? resolveGitHubDispatchInputs(doc) : resolveRunParameters(doc),
+        defaultBranch: resolveDefaultBranch(doc, flavor)
     };
+
+}
+
+// A real trigger (GitHub's "Run workflow" button, Azure's "Run pipeline")
+// always asks which branch to run against, even when a workflow declares
+// no other inputs — this looks for a declared trigger branch to offer as
+// a starting point, falling back to "main" since a static preview has no
+// real repository to list branches from.
+function resolveDefaultBranch(doc, flavor) {
+
+    if (flavor === "github") {
+        const branches = doc.on?.push?.branches;
+        if (Array.isArray(branches) && branches.length > 0) return branches[0];
+        return "main";
+    }
+
+    const azureTrigger = doc.trigger && typeof doc.trigger === "object" ? doc.trigger : null;
+    const repoTrigger = doc.resources?.repositories?.[0]?.trigger;
+
+    const branches = azureTrigger?.branches?.include
+        || (repoTrigger && typeof repoTrigger === "object" ? repoTrigger.branches?.include : null);
+
+    if (Array.isArray(branches) && branches.length > 0) return branches[0];
+
+    return "main";
+
+}
+
+function resolveGitHubDispatchInputs(doc) {
+
+    const dispatch = doc.on?.workflow_dispatch;
+    const inputs = dispatch && typeof dispatch === "object" ? dispatch.inputs : null;
+
+    if (!inputs || typeof inputs !== "object") return [];
+
+    return Object.keys(inputs).map((name) => {
+
+        const raw = inputs[name] || {};
+        const type = raw.type === "boolean" ? "boolean" : (raw.type === "choice" ? "choice" : "string");
+
+        return {
+            name,
+            displayName: raw.description || name,
+            type,
+            default: raw.default ?? (type === "boolean" ? false : ""),
+            options: Array.isArray(raw.options) ? raw.options : null
+        };
+
+    });
 
 }
 
@@ -335,7 +385,8 @@ function resolveRunParameters(doc) {
             name: param.name,
             displayName: param.displayName || param.name,
             type: param.type,
-            default: param.default
+            default: param.default,
+            options: null
         }));
 
 }

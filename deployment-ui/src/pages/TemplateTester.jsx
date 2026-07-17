@@ -9,6 +9,17 @@ const EXAMPLE_YAML = `name: Example CI/CD
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        type: choice
+        options: [staging, production]
+        default: staging
+      skip_tests:
+        description: 'Skip the test job'
+        type: boolean
+        default: false
 
 jobs:
   lint:
@@ -56,11 +67,11 @@ function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function defaultParamValues(runParameters) {
+function defaultParamValues(parsed) {
 
-    const values = {};
+    const values = { branch: parsed.defaultBranch || "main" };
 
-    runParameters.forEach((param) => {
+    parsed.runParameters.forEach((param) => {
         values[param.name] = param.type === "boolean" ? !!param.default : (param.default ?? "");
     });
 
@@ -76,6 +87,7 @@ export default function TemplateTester() {
     const [suggestedFix, setSuggestedFix] = useState(null);
     const [jobStates, setJobStates] = useState({});
     const [running, setRunning] = useState(false);
+    const [runBranch, setRunBranch] = useState(null);
 
     // Set while a parsed pipeline has run parameters that need to be
     // picked before starting — mirrors Azure DevOps' own "Run pipeline"
@@ -96,6 +108,7 @@ export default function TemplateTester() {
         setSuggestedFix(null);
         setGraph(null);
         setParamDialog(null);
+        setRunBranch(null);
     }
 
     function loadExample() {
@@ -142,21 +155,17 @@ export default function TemplateTester() {
 
     }
 
-    // A pipeline with run parameters (Azure's boolean/string prompts)
-    // pauses here for the user to set them, same as Azure's own "Run
-    // pipeline" panel appears before anything starts — jobs whose
-    // condition doesn't reference a checked parameter are skipped rather
-    // than run. A pipeline with none goes straight to running.
+    // A real trigger always asks at least which branch to run — GitHub's
+    // "Run workflow" button and Azure's "Run pipeline" button both open a
+    // panel before anything starts, even for a pipeline with no other
+    // declared inputs — so this always pauses here rather than only when
+    // there happen to be extra parameters. Jobs whose condition doesn't
+    // reference a checked parameter are skipped rather than run.
     function proceedAfterValidate(parsed) {
 
         if (!parsed) return;
 
-        if (parsed.runParameters.length > 0) {
-            setParamDialog({ parsed, values: defaultParamValues(parsed.runParameters) });
-            return;
-        }
-
-        runSimulation(parsed, {});
+        setParamDialog({ parsed, values: defaultParamValues(parsed) });
 
     }
 
@@ -176,6 +185,7 @@ export default function TemplateTester() {
     function startWithParams() {
         const { parsed, values } = paramDialog;
         setParamDialog(null);
+        setRunBranch(values.branch);
         runSimulation(parsed, values);
     }
 
@@ -360,10 +370,20 @@ export default function TemplateTester() {
                     <h2 className="card-title">Run this pipeline</h2>
 
                     <p className="empty-state" style={{ padding: "0 0 15px", textAlign: "left" }}>
-                        This pipeline takes run parameters — set them the way you would in Azure
-                        DevOps' own "Run pipeline" panel. Jobs whose condition doesn't reference a
-                        checked parameter will show as skipped instead of running.
+                        Same prompt a real "Run workflow" / "Run pipeline" button would show — pick a
+                        branch and fill in any inputs before starting. Jobs whose condition doesn't
+                        reference a checked parameter show as skipped instead of running.
                     </p>
+
+                    <div className="form-group">
+                        <label>Branch</label>
+                        <input
+                            className="form-control"
+                            value={paramDialog.values.branch}
+                            onChange={(e) => updateParamValue("branch", e.target.value)}
+                            placeholder="e.g. main"
+                        />
+                    </div>
 
                     {paramDialog.parsed.runParameters.map((param) => (
 
@@ -381,6 +401,21 @@ export default function TemplateTester() {
 
                             </label>
 
+                        ) : param.type === "choice" && param.options ? (
+
+                            <div key={param.name} className="form-group">
+                                <label>{param.displayName}</label>
+                                <select
+                                    className="form-control"
+                                    value={paramDialog.values[param.name]}
+                                    onChange={(e) => updateParamValue(param.name, e.target.value)}
+                                >
+                                    {param.options.map((opt) => (
+                                        <option key={opt} value={opt}>{opt}</option>
+                                    ))}
+                                </select>
+                            </div>
+
                         ) : (
 
                             <div key={param.name} className="form-group">
@@ -389,6 +424,7 @@ export default function TemplateTester() {
                                     className="form-control"
                                     value={paramDialog.values[param.name]}
                                     onChange={(e) => updateParamValue(param.name, e.target.value)}
+                                    placeholder={param.default ? String(param.default) : ""}
                                 />
                             </div>
 
@@ -416,7 +452,14 @@ export default function TemplateTester() {
 
                 <div className="card">
 
-                    <h2 className="card-title">{graph.name || "Pipeline"}</h2>
+                    <h2 className="card-title">
+                        {graph.name || "Pipeline"}
+                        {runBranch && (
+                            <span style={{ fontSize: "13px", fontWeight: 400, color: "var(--text-muted)", marginLeft: "10px" }}>
+                                on {runBranch}
+                            </span>
+                        )}
+                    </h2>
 
                     <WorkflowGraph
                         jobs={graph.jobs}
