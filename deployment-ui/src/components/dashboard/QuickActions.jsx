@@ -37,6 +37,23 @@ export default function QuickActions({
 
                 </button>
 
+                {repository?.html_url && (
+
+                    <a
+
+                        href={repository.html_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn btn-primary"
+
+                    >
+
+                        View Repository
+
+                    </a>
+
+                )}
+
                 {githubTokenConfigured && (
 
                     <button
