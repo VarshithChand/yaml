@@ -13,6 +13,7 @@ import {
     TimelineIcon,
     HistoryIcon,
     TemplatesIcon,
+    SettingsIcon,
     ChevronIcon,
     SunIcon,
     MoonIcon
@@ -26,7 +27,8 @@ const TABS = [
     { key: "analytics", label: "Analytics", Icon: AnalyticsIcon },
     { key: "timeline", label: "Timeline", Icon: TimelineIcon },
     { key: "history", label: "History", Icon: HistoryIcon },
-    { key: "templates", label: "Template Tester", Icon: TemplatesIcon }
+    { key: "templates", label: "Template Tester", Icon: TemplatesIcon },
+    { key: "settings", label: "Settings", Icon: SettingsIcon }
 ];
 
 const STORAGE_KEY = "sidebar-collapsed";
@@ -34,11 +36,12 @@ const STORAGE_KEY = "sidebar-collapsed";
 // Left-hand persistent nav, collapsed to icons-only by default (matches
 // the reference the user pointed at — Google Keep's own left rail) with a
 // small arrow to pull it open, rather than a hamburger button that hides
-// the nav behind a dropdown.
+// the nav behind a dropdown. Settings lives as the last nav item rather
+// than only being reachable through the account badge in TopBar.
 export default function Sidebar() {
 
     const { tab, setTab } = useNavigation();
-    const { canApproveReleases } = useAuth();
+    const { user, tokenOwner, canApproveReleases } = useAuth();
     const { theme, toggleTheme } = useTheme();
 
     const [collapsed, setCollapsed] = useState(() => {
@@ -49,6 +52,9 @@ export default function Sidebar() {
     });
 
     const visibleTabs = TABS.filter((t) => t.key !== "approvals" || canApproveReleases);
+
+    const avatarUrl = user?.avatarUrl || tokenOwner?.avatarUrl || "";
+    const displayName = user?.login || tokenOwner?.login || "";
 
     function toggleCollapsed() {
 
@@ -66,15 +72,29 @@ export default function Sidebar() {
 
         <aside className={`app-sidebar ${collapsed ? "collapsed" : ""}`}>
 
-            <button
-                type="button"
-                className="app-sidebar-toggle"
-                onClick={toggleCollapsed}
-                aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
-                title={collapsed ? "Expand navigation" : "Collapse navigation"}
-            >
-                <ChevronIcon direction={collapsed ? "right" : "left"} />
-            </button>
+            <div className="app-sidebar-head">
+
+                <div className="app-sidebar-avatar" title={displayName || "Not signed in"}>
+
+                    {avatarUrl ? (
+                        <img src={avatarUrl} alt="" />
+                    ) : (
+                        <span>{displayName ? displayName[0].toUpperCase() : "?"}</span>
+                    )}
+
+                </div>
+
+                <button
+                    type="button"
+                    className="app-sidebar-toggle"
+                    onClick={toggleCollapsed}
+                    aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+                    title={collapsed ? "Expand navigation" : "Collapse navigation"}
+                >
+                    <ChevronIcon direction={collapsed ? "right" : "left"} />
+                </button>
+
+            </div>
 
             <nav className="app-sidebar-nav">
 

@@ -87,6 +87,22 @@ export function TemplatesIcon() {
     );
 }
 
+export function SettingsIcon() {
+    return (
+        <svg {...common}>
+            <circle cx="9" cy="9" r="2.6" stroke="currentColor" strokeWidth="1.4" />
+            <line x1="9" y1="1.8" x2="9" y2="3.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            <line x1="9" y1="14.4" x2="9" y2="16.2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            <line x1="1.8" y1="9" x2="3.6" y2="9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            <line x1="14.4" y1="9" x2="16.2" y2="9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            <line x1="3.55" y1="3.55" x2="4.83" y2="4.83" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            <line x1="13.17" y1="13.17" x2="14.45" y2="14.45" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            <line x1="13.17" y1="4.83" x2="14.45" y2="3.55" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            <line x1="3.55" y1="14.45" x2="4.83" y2="13.17" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        </svg>
+    );
+}
+
 export function SunIcon() {
     return (
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">

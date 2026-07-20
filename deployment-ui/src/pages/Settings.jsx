@@ -32,6 +32,7 @@ export default function Settings() {
     const [savingDocker, setSavingDocker] = useState(false);
     const [savingOAuth, setSavingOAuth] = useState(false);
     const [savingAdmins, setSavingAdmins] = useState(false);
+    const [clearingAll, setClearingAll] = useState(false);
 
     const [githubRepoUrl, setGithubRepoUrl] = useState("");
     const [githubToken, setGithubToken] = useState("");
@@ -376,6 +377,41 @@ export default function Settings() {
 
     }
 
+    // Unlike handleClear, this wipes the repository URL/owner too (not
+    // just the token) plus Docker, OAuth, and the admin allowlist — a
+    // full reset back to first-run, not just rotating a credential. Every
+    // other page already loaded data for whatever repo was configured
+    // before this, so a reload is what actually clears that everywhere.
+    async function handleClearAll() {
+
+        if (!window.confirm(
+            "Clear ALL saved data? This removes the GitHub repository URL and token, " +
+            "Docker credentials, OAuth settings, and the admin allowlist. This cannot be undone."
+        )) {
+            return;
+        }
+
+        try {
+
+            setClearingAll(true);
+
+            await clearSettings("all");
+
+            toast.show("All settings cleared.", "success");
+
+            setTimeout(() => window.location.reload(), 900);
+
+        }
+        catch (err) {
+
+            console.error(err);
+            toast.show(err.response?.data?.message || "Failed to clear all data.", "error");
+            setClearingAll(false);
+
+        }
+
+    }
+
     if (loading) {
         return <LoadingSpinner />;
     }
@@ -699,6 +735,29 @@ export default function Settings() {
                     </button>
 
                 </div>
+
+            </div>
+
+            <div className="card card-danger-zone">
+
+                <h2 className="card-title">
+                    Danger Zone
+                </h2>
+
+                <p className="empty-state" style={{ padding: "0 0 15px", textAlign: "left" }}>
+                    Wipes everything on this page at once — the repository URL, the GitHub
+                    token, Docker credentials, OAuth settings, and the admin allowlist —
+                    instead of clearing one section at a time. The portal goes back to its
+                    unconfigured, first-run state.
+                </p>
+
+                <button
+                    className="btn btn-danger"
+                    onClick={handleClearAll}
+                    disabled={clearingAll}
+                >
+                    {clearingAll ? "Clearing..." : "Clear All Data"}
+                </button>
 
             </div>
 

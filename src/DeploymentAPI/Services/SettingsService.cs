@@ -112,8 +112,30 @@ public class SettingsService
         ["admins"] = ("Auth", null)
     };
 
+    // Unlike a per-section clear (which only removes the secret, leaving the
+    // repo URL / registry / client ID in place), "all" wipes every
+    // configurable section entirely — including GitHub Owner/Repository —
+    // resetting the portal back to its unconfigured, first-run state. Jwt
+    // is deliberately left alone so existing sessions/cookies stay valid.
+    public async Task<SettingsViewDto> ClearAllAsync()
+    {
+        var root = await ReadRootAsync();
+
+        root.Remove("GitHub");
+        root.Remove("Docker");
+        root.Remove("GitHubOAuth");
+        root.Remove("Auth");
+
+        await WriteRootAsync(root);
+
+        return BuildView(root);
+    }
+
     public async Task<SettingsViewDto> ClearAsync(string section)
     {
+        if (section == "all")
+            return await ClearAllAsync();
+
         if (!SectionInfo.TryGetValue(section, out var info))
             throw new ArgumentException($"Unknown settings section '{section}'.");
 
