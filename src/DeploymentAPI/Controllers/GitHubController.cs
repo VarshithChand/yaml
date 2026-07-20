@@ -41,6 +41,12 @@ public class GitHubController : ControllerBase
         return Ok(await _service.GetTokenOwnerAsync());
     }
 
+    [HttpGet("account-repositories")]
+    public async Task<IActionResult> AccountRepositories()
+    {
+        return Ok(await _service.GetAccountRepositoriesAsync());
+    }
+
     [HttpGet("artifacts")]
     public async Task<IActionResult> Artifacts([FromQuery] bool force = false)
     {

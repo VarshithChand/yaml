@@ -166,6 +166,40 @@ public class GitHubApiService
     }
 
     //===========================================================
+    // Account Repositories (Settings — "switch repository" picker, lets
+    // someone pick from what the configured token's account can see
+    // instead of only typing a URL by hand)
+    //===========================================================
+
+    public Task<List<AccountRepositoryDto>> GetAccountRepositoriesAsync()
+    {
+        if (!_auth.HasToken)
+            return Task.FromResult(new List<AccountRepositoryDto>());
+
+        return GetCachedAsync("account-repos", async () =>
+        {
+            var client = _auth.CreateClient();
+
+            // affiliation covers repos the token's account owns, collaborates
+            // on, or can see via an org — not just ones it owns outright.
+            var url = "https://api.github.com/user/repos?per_page=100&sort=updated" +
+                "&affiliation=owner,collaborator,organization_member";
+
+            var json = await HttpClientHelper.GetAsync(client, url);
+            var array = JArray.Parse(json);
+
+            return array.Select(x => new AccountRepositoryDto
+            {
+                FullName = x["full_name"]?.ToString() ?? string.Empty,
+                Owner = x["owner"]?["login"]?.ToString() ?? string.Empty,
+                Name = x["name"]?.ToString() ?? string.Empty,
+                Private = (bool?)x["private"] ?? false,
+                HtmlUrl = x["html_url"]?.ToString() ?? string.Empty
+            }).ToList();
+        });
+    }
+
+    //===========================================================
     // Repository
     //===========================================================
 

@@ -9,9 +9,11 @@ import {
     clearSettings,
     previewGitHubRepository
 } from "../services/settingsService";
+import { getAccountRepositories } from "../services/githubService";
 
 import LoadingSpinner from "../components/LoadingSpinner";
 import PageLayout from "../components/layout/PageLayout";
+import ComboBox from "../components/common/ComboBox";
 import useToast from "../hooks/useToast";
 import useAuth from "../hooks/useAuth";
 import useNavigation from "../hooks/useNavigation";
@@ -36,6 +38,12 @@ export default function Settings() {
 
     const [repoPreview, setRepoPreview] = useState(null);
     const [repoPreviewLoading, setRepoPreviewLoading] = useState(false);
+
+    // Repos the configured token's account can see — lets someone pick a
+    // repo instead of typing a URL by hand. Only meaningful once a token
+    // is saved, since listing "your repos" needs to know whose account.
+    const [accountRepos, setAccountRepos] = useState([]);
+    const [loadingAccountRepos, setLoadingAccountRepos] = useState(false);
 
     // Drives the highlighted "Generate a token" link below — GitHub's 60/hour
     // anonymous limit is the single most common reason someone lands here.
@@ -110,6 +118,31 @@ export default function Settings() {
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    useEffect(() => {
+
+        if (!githubTokenConfigured) {
+            setAccountRepos([]);
+            return;
+        }
+
+        let cancelled = false;
+        setLoadingAccountRepos(true);
+
+        getAccountRepositories()
+            .then((response) => {
+                if (!cancelled) setAccountRepos(Array.isArray(response.data) ? response.data : []);
+            })
+            .catch((err) => console.error(err))
+            .finally(() => {
+                if (!cancelled) setLoadingAccountRepos(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+
+    }, [githubTokenConfigured]);
 
     useEffect(() => {
 
@@ -360,6 +393,40 @@ export default function Settings() {
                     Used by the backend to call the GitHub API on the portal's behalf.
                     Saved server-side in a gitignored local config file — never stored in the browser.
                 </p>
+
+                {githubTokenConfigured && (
+
+                    <div className="form-group">
+
+                        <label>Switch repository</label>
+
+                        {loadingAccountRepos ? (
+
+                            <p className="field-hint">Loading repositories for this token's account...</p>
+
+                        ) : accountRepos.length > 0 ? (
+
+                            <ComboBox
+                                options={accountRepos.map((repo) => ({
+                                    value: repo.htmlUrl,
+                                    label: repo.private ? `${repo.fullName} (private)` : repo.fullName
+                                }))}
+                                value={githubRepoUrl}
+                                onChange={(url) => url && setGithubRepoUrl(url)}
+                                placeholder="Search repositories this token can see..."
+                            />
+
+                        ) : (
+
+                            <p className="field-hint">
+                                No repositories found for this token's account.
+                            </p>
+
+                        )}
+
+                    </div>
+
+                )}
 
                 <div className="form-group">
                     <label>Repository URL</label>

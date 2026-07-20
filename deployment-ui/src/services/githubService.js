@@ -21,6 +21,10 @@ export const getTokenOwner = async () => {
     return await api.get("/token-owner");
 };
 
+export const getAccountRepositories = async () => {
+    return await api.get("/account-repositories");
+};
+
 export const getArtifacts = async (force = false) => {
     return await api.get("/artifacts", { params: force ? { force: true } : {} });
 };
