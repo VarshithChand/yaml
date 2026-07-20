@@ -26,8 +26,16 @@ public class GitHubApiService
         _cache = cache;
     }
 
-    private Task<T> GetCachedAsync<T>(string key, Func<Task<T>> factory)
+    // forceRefresh drops the cached entry first — used by a user-initiated
+    // "Refresh" click, which is infrequent and intentional, unlike the
+    // automatic polling this cache exists to protect against. Without this,
+    // clicking Refresh shortly after a page loads (well within the 20s
+    // window) silently returns the same stale response, since nothing ever
+    // told the cache the data was actually asked for on purpose.
+    private Task<T> GetCachedAsync<T>(string key, Func<Task<T>> factory, bool forceRefresh = false)
     {
+        if (forceRefresh) _cache.Remove(key);
+
         return _cache.GetOrCreateAsync(key, entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = CacheDuration;
@@ -161,7 +169,7 @@ public class GitHubApiService
     // Repository
     //===========================================================
 
-    public Task<string> GetRepository() =>
+    public Task<string> GetRepository(bool forceRefresh = false) =>
         GetCachedAsync($"repo:{_auth.Owner}/{_auth.Repository}", async () =>
         {
             var client = _auth.CreateClient();
@@ -170,13 +178,13 @@ public class GitHubApiService
                 $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}";
 
             return await HttpClientHelper.GetAsync(client, url);
-        });
+        }, forceRefresh);
 
     //===========================================================
     // Branches
     //===========================================================
 
-    public Task<List<BranchDto>> GetBranches() =>
+    public Task<List<BranchDto>> GetBranches(bool forceRefresh = false) =>
         GetCachedAsync($"branches:{_auth.Owner}/{_auth.Repository}", async () =>
         {
             var client = _auth.CreateClient();
@@ -195,13 +203,13 @@ public class GitHubApiService
             {
                 Name = x["name"]?.ToString() ?? ""
             }).ToList();
-        });
+        }, forceRefresh);
 
     //===========================================================
     // Artifacts
     //===========================================================
 
-    public Task<List<ArtifactDto>> GetArtifacts() =>
+    public Task<List<ArtifactDto>> GetArtifacts(bool forceRefresh = false) =>
         GetCachedAsync($"artifacts:{_auth.Owner}/{_auth.Repository}", async () =>
         {
             var client = _auth.CreateClient();
@@ -264,7 +272,7 @@ public class GitHubApiService
                     };
                 })
                 .ToList();
-        });
+        }, forceRefresh);
 
     //===========================================================
     // Latest Run For A Workflow (Deploy page — "what did this do last time?")
@@ -421,7 +429,7 @@ public class GitHubApiService
     // Workflows
     //===========================================================
 
-    public Task<string> GetWorkflows() =>
+    public Task<string> GetWorkflows(bool forceRefresh = false) =>
         GetCachedAsync($"workflows:{_auth.Owner}/{_auth.Repository}", async () =>
         {
             var client = _auth.CreateClient();
@@ -430,7 +438,7 @@ public class GitHubApiService
                 $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/actions/workflows?per_page=100";
 
             return await HttpClientHelper.GetAsync(client, url);
-        });
+        }, forceRefresh);
 
     //===========================================================
     // Workflow Inputs (parsed from the workflow's own YAML, so the Deploy

@@ -15,18 +15,18 @@ public class GitHubController : ControllerBase
     }
 
     [HttpGet("repository")]
-    public async Task<IActionResult> Repository()
+    public async Task<IActionResult> Repository([FromQuery] bool force = false)
     {
         // GetRepository() returns GitHub's raw JSON as a string; Content()
         // writes it through as-is instead of Ok() re-encoding it as a JSON string literal.
-        var json = await _service.GetRepository();
+        var json = await _service.GetRepository(force);
         return Content(json, "application/json");
     }
 
     [HttpGet("branches")]
-    public async Task<IActionResult> Branches()
+    public async Task<IActionResult> Branches([FromQuery] bool force = false)
     {
-        return Ok(await _service.GetBranches());
+        return Ok(await _service.GetBranches(force));
     }
 
     [HttpGet("rate-limit")]
@@ -42,9 +42,9 @@ public class GitHubController : ControllerBase
     }
 
     [HttpGet("artifacts")]
-    public async Task<IActionResult> Artifacts()
+    public async Task<IActionResult> Artifacts([FromQuery] bool force = false)
     {
-        return Ok(await _service.GetArtifacts());
+        return Ok(await _service.GetArtifacts(force));
     }
 
     [HttpGet("docker-images")]
@@ -68,9 +68,9 @@ public class GitHubController : ControllerBase
     }
 
     [HttpGet("workflows")]
-    public async Task<IActionResult> Workflows()
+    public async Task<IActionResult> Workflows([FromQuery] bool force = false)
     {
-        var json = await _service.GetWorkflows();
+        var json = await _service.GetWorkflows(force);
         return Content(json, "application/json");
     }
 

@@ -26,7 +26,7 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
-    async function loadData() {
+    async function loadData(force = false) {
 
         try {
 
@@ -42,10 +42,10 @@ export default function Dashboard() {
 
             ] = await Promise.all([
 
-                getRepository(),
-                getBranches(),
-                getArtifacts(),
-                getWorkflows()
+                getRepository(force),
+                getBranches(force),
+                getArtifacts(force),
+                getWorkflows(force)
 
             ]);
 
@@ -158,7 +158,7 @@ export default function Dashboard() {
 
                 <QuickActions
 
-                    refresh={loadData}
+                    refresh={() => loadData(true)}
 
                 />
 

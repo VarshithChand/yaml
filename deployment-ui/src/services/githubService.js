@@ -1,11 +1,16 @@
 import api from "../api/githubApi";
 
-export const getRepository = async () => {
-    return await api.get("/repository");
+// force=true bypasses the backend's 20s cache — used for a user-initiated
+// "Refresh" click, which should actually fetch new data rather than
+// silently handing back whatever was already cached. Automatic polling
+// leaves this false so it keeps getting served from cache, which is what
+// keeps polling from burning through GitHub's rate limit.
+export const getRepository = async (force = false) => {
+    return await api.get("/repository", { params: force ? { force: true } : {} });
 };
 
-export const getBranches = async () => {
-    return await api.get("/branches");
+export const getBranches = async (force = false) => {
+    return await api.get("/branches", { params: force ? { force: true } : {} });
 };
 
 export const getRateLimit = async () => {
@@ -16,8 +21,8 @@ export const getTokenOwner = async () => {
     return await api.get("/token-owner");
 };
 
-export const getArtifacts = async () => {
-    return await api.get("/artifacts");
+export const getArtifacts = async (force = false) => {
+    return await api.get("/artifacts", { params: force ? { force: true } : {} });
 };
 
 export const deleteArtifact = async (id) => {
@@ -28,8 +33,8 @@ export const getDockerImages = async () => {
     return await api.get("/docker-images");
 };
 
-export const getWorkflows = async () => {
-    return await api.get("/workflows");
+export const getWorkflows = async (force = false) => {
+    return await api.get("/workflows", { params: force ? { force: true } : {} });
 };
 
 export const getWorkflowInputs = async (path, branch) => {
