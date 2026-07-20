@@ -1,0 +1,235 @@
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+
+import { getAccountRepositories } from "../../services/githubService";
+import { saveGitHubSettings } from "../../services/settingsService";
+
+import SearchBox from "../common/SearchBox";
+import ConfirmDialog from "../ConfirmDialog";
+import useToast from "../../hooks/useToast";
+
+export default function SwitchRepositoryModal({
+
+    open,
+    currentOwner,
+    currentRepository,
+    onClose
+
+}) {
+
+    const toast = useToast();
+
+    const [repos, setRepos] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+    const [search, setSearch] = useState("");
+
+    const [target, setTarget] = useState(null);
+    const [switching, setSwitching] = useState(false);
+
+    useEffect(() => {
+
+        if (!open) {
+            return;
+        }
+
+        let cancelled = false;
+
+        setLoading(true);
+        setError("");
+
+        getAccountRepositories()
+            .then((response) => {
+
+                if (!cancelled) {
+                    setRepos(Array.isArray(response.data) ? response.data : []);
+                }
+
+            })
+            .catch((err) => {
+
+                console.error(err);
+
+                if (!cancelled) {
+                    setError("Unable to load repositories for this token's account.");
+                }
+
+            })
+            .finally(() => {
+
+                if (!cancelled) {
+                    setLoading(false);
+                }
+
+            });
+
+        return () => {
+            cancelled = true;
+        };
+
+    }, [open]);
+
+    // Reset search/target each time the modal is reopened, so it doesn't
+    // reappear showing whatever was left over from the last time it was used.
+    useEffect(() => {
+
+        if (open) {
+            setSearch("");
+            setTarget(null);
+        }
+
+    }, [open]);
+
+    if (!open) {
+        return null;
+    }
+
+    const filtered = repos.filter((repo) =>
+        repo.fullName.toLowerCase().includes(search.toLowerCase())
+    );
+
+    const currentFullName = currentOwner && currentRepository
+        ? `${currentOwner}/${currentRepository}`
+        : null;
+
+    async function handleConfirmSwitch() {
+
+        if (!target) {
+            return;
+        }
+
+        try {
+
+            setSwitching(true);
+
+            await saveGitHubSettings({
+                owner: target.owner,
+                repository: target.name,
+                personalAccessToken: null
+            });
+
+            toast.show(`Switched to ${target.fullName}.`, "success");
+
+            // Same reason Settings.jsx does a full reload after saving: every
+            // page that already fetched data for the old repo has no way to
+            // know a different one is now configured, short of refetching
+            // everything itself.
+            setTimeout(() => window.location.reload(), 900);
+
+        }
+        catch (err) {
+
+            console.error(err);
+            toast.show(err.response?.data?.message || "Failed to switch repository.", "error");
+            setSwitching(false);
+            setTarget(null);
+
+        }
+
+    }
+
+    // Portalled to document.body: this modal is triggered from inside a
+    // .card, and .card:hover applies a transform — which turns the card into
+    // a new containing block for any position:fixed descendant, trapping the
+    // backdrop inside the card's box instead of covering the viewport.
+    return createPortal(
+
+        <>
+
+        <div className="dialog-backdrop" onClick={onClose}>
+
+            <div className="dialog dialog-wide" onClick={(e) => e.stopPropagation()}>
+
+                <h2>Switch Repository</h2>
+
+                <p className="field-hint" style={{ marginBottom: "16px" }}>
+                    Choose a repository this token's account can see. The portal will
+                    switch to it and reload.
+                </p>
+
+                <SearchBox
+                    placeholder="Search repositories..."
+                    value={search}
+                    onChange={setSearch}
+                />
+
+                <div className="repo-picker-grid">
+
+                    {loading && (
+                        <p className="field-hint">Loading repositories...</p>
+                    )}
+
+                    {!loading && error && (
+                        <div className="error-message">{error}</div>
+                    )}
+
+                    {!loading && !error && filtered.length === 0 && (
+                        <p className="empty-state">No repositories match "{search}".</p>
+                    )}
+
+                    {!loading && !error && filtered.map((repo) => {
+
+                        const isCurrent = repo.fullName === currentFullName;
+
+                        return (
+
+                            <button
+                                type="button"
+                                key={repo.fullName}
+                                className={`repo-picker-card ${isCurrent ? "repo-picker-card-current" : ""}`}
+                                disabled={isCurrent}
+                                onClick={() => setTarget(repo)}
+                            >
+
+                                <span className="repo-picker-name">{repo.fullName}</span>
+
+                                <span className={`badge ${repo.private ? "badge-secondary" : "badge-info"}`}>
+                                    {repo.private ? "Private" : "Public"}
+                                </span>
+
+                                {isCurrent && (
+                                    <span className="badge badge-success">Current</span>
+                                )}
+
+                            </button>
+
+                        );
+
+                    })}
+
+                </div>
+
+                <div>
+                    <button className="btn" onClick={onClose}>Close</button>
+                </div>
+
+            </div>
+
+        </div>
+
+        <ConfirmDialog
+
+            open={!!target}
+            title="Switch repository?"
+            confirmLabel={switching ? "Switching..." : "Switch"}
+            message={
+                target && (
+                    <>
+                        From <strong>{currentFullName || "(no repository configured)"}</strong>
+                        {" "}to <strong>{target.fullName}</strong>.
+                        {" "}This changes the repository the whole portal points at.
+                    </>
+                )
+            }
+            onConfirm={handleConfirmSwitch}
+            onCancel={() => !switching && setTarget(null)}
+
+        />
+
+        </>,
+
+        document.body
+
+    );
+
+}

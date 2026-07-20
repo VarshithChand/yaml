@@ -159,6 +159,7 @@ export default function Dashboard() {
                 <QuickActions
 
                     refresh={() => loadData(true)}
+                    repository={repository}
 
                 />
 

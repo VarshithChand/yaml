@@ -1,8 +1,17 @@
+import { useState } from "react";
+
+import SwitchRepositoryModal from "./SwitchRepositoryModal";
+import useAuth from "../../hooks/useAuth";
+
 export default function QuickActions({
 
-    refresh
+    refresh,
+    repository
 
 }) {
+
+    const { githubTokenConfigured } = useAuth();
+    const [switchOpen, setSwitchOpen] = useState(false);
 
     return (
 
@@ -25,6 +34,31 @@ export default function QuickActions({
                 Refresh Dashboard
 
             </button>
+
+            {githubTokenConfigured && (
+
+                <button
+
+                    className="btn btn-secondary"
+                    style={{ marginTop: "10px" }}
+                    onClick={() => setSwitchOpen(true)}
+
+                >
+
+                    Switch Repository
+
+                </button>
+
+            )}
+
+            <SwitchRepositoryModal
+
+                open={switchOpen}
+                currentOwner={repository?.owner?.login}
+                currentRepository={repository?.name}
+                onClose={() => setSwitchOpen(false)}
+
+            />
 
         </div>
 

@@ -6,6 +6,8 @@ export default function ConfirmDialog({
 
     message,
 
+    confirmLabel = "Deploy",
+
     onConfirm,
 
     onCancel
@@ -41,7 +43,7 @@ export default function ConfirmDialog({
                         onClick={onConfirm}
                     >
 
-                        Deploy
+                        {confirmLabel}
 
                     </button>
 
