@@ -38,7 +38,7 @@ export default function DockerImagesTable({ images = [], owner }) {
                         <tr>
                             <th>Image</th>
                             <th>Visibility</th>
-                            <th>Versions</th>
+                            <th className="num">Versions</th>
                             <th>Linked Repository</th>
                             <th>Last Pushed</th>
                             <th>View</th>
@@ -60,7 +60,7 @@ export default function DockerImagesTable({ images = [], owner }) {
                                     </span>
                                 </td>
 
-                                <td>{image.versionCount}</td>
+                                <td className="num">{image.versionCount}</td>
 
                                 <td>{image.repository || <span className="empty-state">—</span>}</td>
 

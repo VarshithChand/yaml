@@ -1016,6 +1016,15 @@ textarea{
 
 }
 
+.table th.num,
+.table td.num{
+
+    text-align:right;
+
+    font-variant-numeric:tabular-nums;
+
+}
+
 .table td{
 
     padding:14px;

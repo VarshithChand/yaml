@@ -68,7 +68,7 @@ export default function ArtifactsTable({ artifacts = [], owner, repository, onDe
 
                         <tr>
                             <th>Name</th>
-                            <th>Size</th>
+                            <th className="num">Size</th>
                             <th>Status</th>
                             <th>Created</th>
                             <th>Download</th>
@@ -90,7 +90,7 @@ export default function ArtifactsTable({ artifacts = [], owner, repository, onDe
 
                                 <td>{artifact.name}</td>
 
-                                <td>{formatBytes(artifact.size)}</td>
+                                <td className="num">{formatBytes(artifact.size)}</td>
 
                                 <td>
                                     <span className={`badge ${artifact.expired ? "badge-danger" : "badge-success"}`}>
