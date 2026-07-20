@@ -462,6 +462,98 @@ textarea{
 
 }
 
+.settings-hub{
+
+    display:grid;
+
+    grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));
+
+    gap:20px;
+
+}
+
+.settings-hub-tile{
+
+    text-align:left;
+
+    background:var(--card-bg);
+
+    border:1px solid var(--border);
+
+    border-radius:12px;
+
+    padding:24px;
+
+    cursor:pointer;
+
+    font-family:inherit;
+
+    transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+
+}
+
+.settings-hub-tile:hover{
+
+    transform:translateY(-3px);
+
+    box-shadow:0 10px 26px var(--card-shadow);
+
+    border-color:var(--heading-accent);
+
+}
+
+.settings-hub-tile h2{
+
+    font-family:'Lexend','Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+
+    font-size:18px;
+
+    color:var(--heading-accent);
+
+    margin-bottom:8px;
+
+}
+
+.settings-hub-tile p{
+
+    color:var(--text-muted);
+
+    font-size:14px;
+
+    line-height:1.5;
+
+}
+
+.settings-back-link{
+
+    display:inline-flex;
+
+    align-items:center;
+
+    background:none;
+
+    border:none;
+
+    color:var(--heading-accent);
+
+    font-size:14px;
+
+    font-weight:600;
+
+    cursor:pointer;
+
+    padding:0;
+
+    margin-bottom:16px;
+
+}
+
+.settings-back-link:hover{
+
+    text-decoration:underline;
+
+}
+
 /* ==========================================
    BRAND / TOP BAR / INFO ROW / ERRORS
 ========================================== */
@@ -554,23 +646,11 @@ textarea{
 
     align-items:center;
 
-    justify-content:space-between;
-
-    gap:8px;
+    justify-content:center;
 
     padding:12px;
 
     border-bottom:1px solid var(--border);
-
-}
-
-.app-sidebar.collapsed .app-sidebar-head{
-
-    flex-direction:column;
-
-    justify-content:center;
-
-    gap:10px;
 
 }
 
@@ -609,6 +689,53 @@ textarea{
     height:100%;
 
     object-fit:cover;
+
+}
+
+.account-avatar-wrap{
+
+    display:inline-flex;
+
+    align-items:center;
+
+}
+
+.account-avatar-name{
+
+    max-width:0;
+
+    overflow:hidden;
+
+    white-space:nowrap;
+
+    opacity:0;
+
+    font-size:13px;
+
+    font-weight:600;
+
+    color:var(--text);
+
+    transition:max-width .28s ease, opacity .2s ease, margin .28s ease;
+
+}
+
+.account-avatar-wrap:hover .account-avatar-name,
+.account-avatar-wrap:focus-within .account-avatar-name{
+
+    max-width:180px;
+
+    opacity:1;
+
+    margin-right:8px;
+
+}
+
+@media(prefers-reduced-motion:reduce){
+
+    .account-avatar-name{
+        transition:none;
+    }
 
 }
 

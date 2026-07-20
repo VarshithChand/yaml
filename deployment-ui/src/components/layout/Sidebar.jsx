@@ -3,7 +3,6 @@ import { useState } from "react";
 import useNavigation from "../../hooks/useNavigation";
 import useAuth from "../../hooks/useAuth";
 import useTheme from "../../hooks/useTheme";
-import AccountAvatar from "../common/AccountAvatar";
 
 import {
     DashboardIcon,
@@ -42,7 +41,7 @@ const STORAGE_KEY = "sidebar-collapsed";
 export default function Sidebar() {
 
     const { tab, setTab } = useNavigation();
-    const { user, tokenOwner, canApproveReleases } = useAuth();
+    const { canApproveReleases } = useAuth();
     const { theme, toggleTheme } = useTheme();
 
     const [collapsed, setCollapsed] = useState(() => {
@@ -53,9 +52,6 @@ export default function Sidebar() {
     });
 
     const visibleTabs = TABS.filter((t) => t.key !== "approvals" || canApproveReleases);
-
-    const avatarUrl = user?.avatarUrl || tokenOwner?.avatarUrl || "";
-    const displayName = user?.login || tokenOwner?.login || "";
 
     function toggleCollapsed() {
 
@@ -84,8 +80,6 @@ export default function Sidebar() {
                 >
                     <ChevronIcon direction={collapsed ? "right" : "left"} />
                 </button>
-
-                <AccountAvatar avatarUrl={avatarUrl} name={displayName} size={32} />
 
             </div>
 

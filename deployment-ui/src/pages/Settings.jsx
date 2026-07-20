@@ -29,6 +29,12 @@ export default function Settings() {
     const { refreshOauthStatus } = useAuth();
     const { pendingRepoUrl, setPendingRepoUrl } = useNavigation();
 
+    // "hub" is the Settings landing page — a couple of option tiles rather
+    // than one long scroll of every card at once. Picking one switches to
+    // that section in place; there's no separate route/URL for these, so
+    // navigating away and back through Sidebar always lands on the hub.
+    const [view, setView] = useState("hub");
+
     const [loading, setLoading] = useState(true);
 
     const [savingGitHub, setSavingGitHub] = useState(false);
@@ -455,9 +461,43 @@ export default function Settings() {
         return <LoadingSpinner />;
     }
 
+    const pageTitle = view === "credentials" ? "Credentials" : view === "activity-log" ? "Activity Log" : "Settings";
+
     return (
 
-        <PageLayout title="Settings">
+        <PageLayout title={pageTitle}>
+
+            {view === "hub" && (
+
+                <div className="settings-hub">
+
+                    <button type="button" className="settings-hub-tile" onClick={() => setView("credentials")}>
+                        <h2>Credentials</h2>
+                        <p>
+                            GitHub, Docker, and OAuth credentials plus the admin allowlist —
+                            everything the backend needs to talk to GitHub on the portal's behalf.
+                        </p>
+                    </button>
+
+                    <button type="button" className="settings-hub-tile" onClick={() => setView("activity-log")}>
+                        <h2>Activity Log</h2>
+                        <p>
+                            Recent settings changes and backend errors, kept in memory on
+                            the server.
+                        </p>
+                    </button>
+
+                </div>
+
+            )}
+
+            {view === "credentials" && (
+
+            <>
+
+            <button type="button" className="settings-back-link" onClick={() => setView("hub")}>
+                ← Back to Settings
+            </button>
 
             <div className="card">
 
@@ -778,6 +818,41 @@ export default function Settings() {
 
             </div>
 
+            <div className="card card-danger-zone">
+
+                <h2 className="card-title">
+                    Danger Zone
+                </h2>
+
+                <p className="empty-state" style={{ padding: "0 0 15px", textAlign: "left" }}>
+                    Wipes everything on this page at once — the repository URL, the GitHub
+                    token, Docker credentials, OAuth settings, and the admin allowlist —
+                    instead of clearing one section at a time. The portal goes back to its
+                    unconfigured, first-run state.
+                </p>
+
+                <button
+                    className="btn btn-danger"
+                    onClick={handleClearAll}
+                    disabled={clearingAll}
+                >
+                    {clearingAll ? "Clearing..." : "Clear All Data"}
+                </button>
+
+            </div>
+
+            </>
+
+            )}
+
+            {view === "activity-log" && (
+
+            <>
+
+            <button type="button" className="settings-back-link" onClick={() => setView("hub")}>
+                ← Back to Settings
+            </button>
+
             <div className="card">
 
                 <h2 className="card-title">
@@ -852,28 +927,9 @@ export default function Settings() {
 
             </div>
 
-            <div className="card card-danger-zone">
+            </>
 
-                <h2 className="card-title">
-                    Danger Zone
-                </h2>
-
-                <p className="empty-state" style={{ padding: "0 0 15px", textAlign: "left" }}>
-                    Wipes everything on this page at once — the repository URL, the GitHub
-                    token, Docker credentials, OAuth settings, and the admin allowlist —
-                    instead of clearing one section at a time. The portal goes back to its
-                    unconfigured, first-run state.
-                </p>
-
-                <button
-                    className="btn btn-danger"
-                    onClick={handleClearAll}
-                    disabled={clearingAll}
-                >
-                    {clearingAll ? "Clearing..." : "Clear All Data"}
-                </button>
-
-            </div>
+            )}
 
         </PageLayout>
 
