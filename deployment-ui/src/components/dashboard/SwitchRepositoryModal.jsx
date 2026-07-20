@@ -6,7 +6,26 @@ import { saveGitHubSettings } from "../../services/settingsService";
 
 import SearchBox from "../common/SearchBox";
 import ConfirmDialog from "../ConfirmDialog";
+import Pagination from "../common/Pagination";
 import useToast from "../../hooks/useToast";
+import usePagination from "../../hooks/usePagination";
+
+const PAGE_SIZE = 9;
+
+// A plain rounded rectangle with a spine down the left edge — reads as a
+// "repository" glyph without risking a hand-authored multi-curve path.
+function RepoIcon() {
+
+    return (
+
+        <svg className="repo-picker-icon" width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+            <line x1="5.5" y1="2.5" x2="5.5" y2="13.5" stroke="currentColor" strokeWidth="1.3" />
+        </svg>
+
+    );
+
+}
 
 export default function SwitchRepositoryModal({
 
@@ -80,13 +99,26 @@ export default function SwitchRepositoryModal({
 
     }, [open]);
 
-    if (!open) {
-        return null;
-    }
-
     const filtered = repos.filter((repo) =>
         repo.fullName.toLowerCase().includes(search.toLowerCase())
     );
+
+    const { page, setPage, pageCount, pageItems, totalCount, startIndex, endIndex } =
+        usePagination(filtered, PAGE_SIZE);
+
+    // A new search result set can leave `page` pointing past its own end
+    // (usePagination only snaps back on the array reference it was given,
+    // and `filtered` is a new array every render) — reset explicitly instead.
+    useEffect(() => {
+
+        setPage(1);
+
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [search]);
+
+    if (!open) {
+        return null;
+    }
 
     const currentFullName = currentOwner && currentRepository
         ? `${currentOwner}/${currentRepository}`
@@ -140,12 +172,23 @@ export default function SwitchRepositoryModal({
 
             <div className="dialog dialog-wide" onClick={(e) => e.stopPropagation()}>
 
-                <h2>Switch Repository</h2>
+                <div className="repo-picker-header">
 
-                <p className="field-hint" style={{ marginBottom: "16px" }}>
-                    Choose a repository this token's account can see. The portal will
-                    switch to it and reload.
-                </p>
+                    <div>
+                        <h2>Switch Repository</h2>
+                        <p className="field-hint">
+                            Choose a repository this token's account can see. The portal
+                            will switch to it and reload.
+                        </p>
+                    </div>
+
+                    {!loading && !error && (
+                        <span className="repo-picker-count">
+                            {totalCount} {totalCount === 1 ? "repository" : "repositories"}
+                        </span>
+                    )}
+
+                </div>
 
                 <SearchBox
                     placeholder="Search repositories..."
@@ -167,7 +210,7 @@ export default function SwitchRepositoryModal({
                         <p className="empty-state">No repositories match "{search}".</p>
                     )}
 
-                    {!loading && !error && filtered.map((repo) => {
+                    {!loading && !error && pageItems.map((repo) => {
 
                         const isCurrent = repo.fullName === currentFullName;
 
@@ -181,15 +224,25 @@ export default function SwitchRepositoryModal({
                                 onClick={() => setTarget(repo)}
                             >
 
-                                <span className="repo-picker-name">{repo.fullName}</span>
+                                <div className="repo-picker-title">
+                                    <RepoIcon />
+                                    <span className="repo-picker-name">
+                                        <span className="repo-picker-owner">{repo.owner}/</span>
+                                        {repo.name}
+                                    </span>
+                                </div>
 
-                                <span className={`badge ${repo.private ? "badge-secondary" : "badge-info"}`}>
-                                    {repo.private ? "Private" : "Public"}
-                                </span>
+                                <div className="repo-picker-meta">
 
-                                {isCurrent && (
-                                    <span className="badge badge-success">Current</span>
-                                )}
+                                    <span className={`badge ${repo.private ? "badge-secondary" : "badge-info"}`}>
+                                        {repo.private ? "Private" : "Public"}
+                                    </span>
+
+                                    {isCurrent && (
+                                        <span className="badge badge-success">Current</span>
+                                    )}
+
+                                </div>
 
                             </button>
 
@@ -198,6 +251,19 @@ export default function SwitchRepositoryModal({
                     })}
 
                 </div>
+
+                {!loading && !error && (
+
+                    <Pagination
+                        page={page}
+                        pageCount={pageCount}
+                        totalCount={totalCount}
+                        startIndex={startIndex}
+                        endIndex={endIndex}
+                        onPageChange={setPage}
+                    />
+
+                )}
 
                 <div>
                     <button className="btn" onClick={onClose}>Close</button>
