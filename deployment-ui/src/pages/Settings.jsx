@@ -14,6 +14,7 @@ import { getAccountRepositories } from "../services/githubService";
 import LoadingSpinner from "../components/LoadingSpinner";
 import PageLayout from "../components/layout/PageLayout";
 import ComboBox from "../components/common/ComboBox";
+import ClearableInput from "../components/common/ClearableInput";
 import useToast from "../hooks/useToast";
 import useAuth from "../hooks/useAuth";
 import useNavigation from "../hooks/useNavigation";
@@ -430,11 +431,11 @@ export default function Settings() {
 
                 <div className="form-group">
                     <label>Repository URL</label>
-                    <input
-                        className="form-control"
+                    <ClearableInput
                         placeholder="https://github.com/owner/repo"
                         value={githubRepoUrl}
                         onChange={(e) => setGithubRepoUrl(e.target.value)}
+                        onClear={() => setGithubRepoUrl("")}
                         autoComplete="off"
                         name="repository-url"
                     />
@@ -558,11 +559,11 @@ export default function Settings() {
 
                 <div className="form-group">
                     <label>Registry</label>
-                    <input
-                        className="form-control"
+                    <ClearableInput
                         placeholder="docker.io / ghcr.io / your-registry.com"
                         value={dockerRegistry}
                         onChange={(e) => setDockerRegistry(e.target.value)}
+                        onClear={() => setDockerRegistry("")}
                         autoComplete="off"
                         name="docker-registry"
                     />
@@ -570,10 +571,10 @@ export default function Settings() {
 
                 <div className="form-group">
                     <label>Username</label>
-                    <input
-                        className="form-control"
+                    <ClearableInput
                         value={dockerUsername}
                         onChange={(e) => setDockerUsername(e.target.value)}
+                        onClear={() => setDockerUsername("")}
                         autoComplete="off"
                         name="docker-username"
                     />
@@ -587,12 +588,12 @@ export default function Settings() {
                             <span className="badge badge-success">Saved</span>
                         )}
                     </label>
-                    <input
+                    <ClearableInput
                         type="password"
-                        className="form-control"
                         placeholder={dockerPasswordConfigured ? "Leave blank to keep current password" : ""}
                         value={dockerPassword}
                         onChange={(e) => setDockerPassword(e.target.value)}
+                        onClear={() => setDockerPassword("")}
                         autoComplete="new-password"
                     />
                 </div>
@@ -624,10 +625,10 @@ export default function Settings() {
 
                 <div className="form-group">
                     <label>Client ID</label>
-                    <input
-                        className="form-control"
+                    <ClearableInput
                         value={oauthClientId}
                         onChange={(e) => setOauthClientId(e.target.value)}
+                        onClear={() => setOauthClientId("")}
                         autoComplete="off"
                         name="oauth-client-id"
                     />
@@ -641,12 +642,12 @@ export default function Settings() {
                             <span className="badge badge-success">Saved</span>
                         )}
                     </label>
-                    <input
+                    <ClearableInput
                         type="password"
-                        className="form-control"
                         placeholder={oauthClientSecretConfigured ? "Leave blank to keep current secret" : ""}
                         value={oauthClientSecret}
                         onChange={(e) => setOauthClientSecret(e.target.value)}
+                        onClear={() => setOauthClientSecret("")}
                         autoComplete="new-password"
                     />
                 </div>
@@ -677,11 +678,11 @@ export default function Settings() {
 
                 <div className="form-group">
                     <label>GitHub Usernames (comma-separated)</label>
-                    <input
-                        className="form-control"
+                    <ClearableInput
                         placeholder="octocat, hubot"
                         value={adminUsernamesText}
                         onChange={(e) => setAdminUsernamesText(e.target.value)}
+                        onClear={() => setAdminUsernamesText("")}
                         autoComplete="off"
                         name="admin-usernames"
                     />

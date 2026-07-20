@@ -584,6 +584,64 @@ textarea{
 
 }
 
+.clearable-input-wrap{
+
+    position:relative;
+
+}
+
+.clearable-input-wrap .form-control{
+
+    padding-right:38px;
+
+}
+
+.clearable-input-btn{
+
+    position:absolute;
+
+    top:50%;
+
+    right:6px;
+
+    transform:translateY(-50%);
+
+    width:24px;
+
+    height:24px;
+
+    border:none;
+
+    border-radius:50%;
+
+    background:none;
+
+    color:var(--text-muted);
+
+    font-size:18px;
+
+    line-height:1;
+
+    cursor:pointer;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    transition:background-color .15s ease, color .15s ease;
+
+}
+
+.clearable-input-btn:hover{
+
+    background:var(--table-row-hover);
+
+    color:var(--text);
+
+}
+
 .search-inline{
 
     margin-bottom:10px;
