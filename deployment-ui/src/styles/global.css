@@ -99,10 +99,24 @@ body{
    loading) grows to fill whatever's left, so Footer sits flush against
    the bottom of the viewport on short pages instead of floating above a
    gap of bare background. */
+/* App shell: TopBar sits in normal flow as the first row, .app-body fills
+   everything below it. Sidebar and .app-content-column are the two
+   columns of that row — each scrolls independently (own overflow-y)
+   instead of the whole document scrolling, so TopBar and Sidebar stay
+   in place exactly like a desktop app rather than relying on
+   position:sticky offsets that have to match TopBar's height by hand. */
 #root{
     display:flex;
+    flex-direction:column;
+    height:100vh;
+    overflow:hidden;
+}
+
+.app-body{
+    display:flex;
     flex-direction:row;
-    min-height:100vh;
+    flex:1;
+    min-height:0;
 }
 
 .app-content-column{
@@ -110,6 +124,8 @@ body{
     flex-direction:column;
     flex:1;
     min-width:0;
+    height:100%;
+    overflow-y:auto;
 }
 
 .main,
@@ -468,11 +484,7 @@ textarea{
 
     border-right:1px solid var(--border);
 
-    position:sticky;
-
-    top:0;
-
-    height:100vh;
+    height:100%;
 
     overflow-y:auto;
 
@@ -660,11 +672,7 @@ textarea{
 
 .top-bar{
 
-    position:sticky;
-
-    top:0;
-
-    z-index:100;
+    flex-shrink:0;
 
     display:flex;
 

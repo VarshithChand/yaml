@@ -22,27 +22,31 @@ function App(){
 
         <>
 
-            <Sidebar />
+            <TopBar />
 
-            <div className="app-content-column">
+            <div className="app-body">
 
-                <TopBar />
+                <Sidebar />
 
-                <ErrorBoundary key={tab} onRecover={() => setTab("dashboard")}>
+                <div className="app-content-column">
 
-                    {tab === "dashboard" && <Dashboard/>}
-                    {tab === "deploy" && <Deploy/>}
-                    {tab === "approvals" && <Approvals/>}
-                    {tab === "storage" && <Storage/>}
-                    {tab === "analytics" && <Analytics/>}
-                    {tab === "timeline" && <Timeline/>}
-                    {tab === "history" && <History/>}
-                    {tab === "templates" && <TemplateTester/>}
-                    {tab === "settings" && <Settings/>}
+                    <ErrorBoundary key={tab} onRecover={() => setTab("dashboard")}>
 
-                </ErrorBoundary>
+                        {tab === "dashboard" && <Dashboard/>}
+                        {tab === "deploy" && <Deploy/>}
+                        {tab === "approvals" && <Approvals/>}
+                        {tab === "storage" && <Storage/>}
+                        {tab === "analytics" && <Analytics/>}
+                        {tab === "timeline" && <Timeline/>}
+                        {tab === "history" && <History/>}
+                        {tab === "templates" && <TemplateTester/>}
+                        {tab === "settings" && <Settings/>}
 
-                <Footer />
+                    </ErrorBoundary>
+
+                    <Footer />
+
+                </div>
 
             </div>
 
