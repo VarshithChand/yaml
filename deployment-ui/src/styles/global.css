@@ -2489,23 +2489,41 @@ textarea{
     padding:40px;
 }
 
-.spinner{
-    width:45px;
-    height:45px;
-    border:5px solid #ddd;
-    border-top:5px solid #2563eb;
-    border-radius:50%;
-    animation:spin 1s linear infinite;
+.loading-logo{
+    animation:loading-pulse 1.4s ease-in-out infinite;
 }
 
-@keyframes spin{
+@keyframes loading-pulse{
 
-    from{
-        transform:rotate(0deg);
+    0%, 100%{
+        transform:scale(1);
+        opacity:1;
     }
 
-    to{
-        transform:rotate(360deg);
+    50%{
+        transform:scale(.88);
+        opacity:.6;
+    }
+
+}
+
+.loading-container p{
+    margin-top:16px;
+    color:var(--text-muted);
+}
+
+.loading-slow{
+    margin-top:20px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:10px;
+}
+
+@media(prefers-reduced-motion:reduce){
+
+    .loading-logo{
+        animation:none;
     }
 
 }
