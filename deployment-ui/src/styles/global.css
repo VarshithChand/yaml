@@ -264,7 +264,9 @@ textarea{
 
 .app-footer{
 
-    margin-top:40px;
+    flex-shrink:0;
+
+    margin-top:24px;
 
     border-top:1px solid var(--border);
 
@@ -278,7 +280,7 @@ textarea{
 
     margin:0 auto;
 
-    padding:24px 30px;
+    padding:10px 30px;
 
     display:flex;
 
@@ -286,7 +288,7 @@ textarea{
 
     flex-wrap:wrap;
 
-    gap:10px 24px;
+    gap:6px 24px;
 
 }
 
@@ -306,7 +308,7 @@ textarea{
 
     font-family:'Lexend','Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
 
-    font-size:14px;
+    font-size:12.5px;
 
     font-weight:600;
 
@@ -320,7 +322,7 @@ textarea{
 
     min-width:220px;
 
-    font-size:13px;
+    font-size:12px;
 
     color:var(--text-muted);
 
@@ -330,7 +332,7 @@ textarea{
 
     flex-shrink:0;
 
-    font-size:13px;
+    font-size:12px;
 
     color:var(--text-muted);
 

@@ -12,7 +12,7 @@ export default function Footer() {
             <div className="app-footer-inner">
 
                 <div className="app-footer-brand">
-                    <Logo compact size={22} showEyebrow={false} />
+                    <Logo compact size={16} showEyebrow={false} />
                     <span className="app-footer-title">Deployment Portal</span>
                 </div>
 
