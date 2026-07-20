@@ -479,7 +479,10 @@ public class GitHubApiService
     // page can render only the fields a given workflow actually declares)
     //===========================================================
 
-    public async Task<List<WorkflowInputDto>> GetWorkflowInputsAsync(string workflowPath, string? branch)
+    // Shared by GetWorkflowInputsAsync (parses it) and GetWorkflowYamlAsync
+    // (returns it as-is for the "View YAML" viewer) — both need the same
+    // repo-contents fetch + base64 decode of a workflow file.
+    private async Task<string> FetchFileTextAsync(string path, string? branch)
     {
         var client = _auth.CreateClient();
 
@@ -487,10 +490,20 @@ public class GitHubApiService
 
         var contentJson = await HttpClientHelper.GetAsync(
             client,
-            $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/contents/{workflowPath}{refQuery}");
+            $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/contents/{path}{refQuery}");
 
         var base64 = JObject.Parse(contentJson)["content"]?.ToString() ?? "";
-        var yamlText = Encoding.UTF8.GetString(Convert.FromBase64String(base64.Replace("\n", "").Replace("\r", "")));
+        return Encoding.UTF8.GetString(Convert.FromBase64String(base64.Replace("\n", "").Replace("\r", "")));
+    }
+
+    // Raw YAML text for the "View YAML" viewer — same file GetWorkflowInputsAsync
+    // parses, just handed back verbatim instead of reduced to its inputs.
+    public Task<string> GetWorkflowYamlAsync(string workflowPath, string? branch) =>
+        FetchFileTextAsync(workflowPath, branch);
+
+    public async Task<List<WorkflowInputDto>> GetWorkflowInputsAsync(string workflowPath, string? branch)
+    {
+        var yamlText = await FetchFileTextAsync(workflowPath, branch);
 
         var deserializer = new DeserializerBuilder().Build();
         var root = deserializer.Deserialize<Dictionary<object, object>>(yamlText);

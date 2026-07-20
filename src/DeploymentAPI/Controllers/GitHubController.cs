@@ -89,6 +89,16 @@ public class GitHubController : ControllerBase
         return Ok(await _service.GetWorkflowInputsAsync(path, branch));
     }
 
+    [HttpGet("workflow-yaml")]
+    public async Task<IActionResult> WorkflowYaml([FromQuery] string path, [FromQuery] string? branch)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return BadRequest("path is required.");
+
+        var yaml = await _service.GetWorkflowYamlAsync(path, branch);
+        return Ok(new { path, branch, content = yaml });
+    }
+
     [HttpGet("workflows/last-run")]
     public async Task<IActionResult> LastRun([FromQuery] string workflow, [FromQuery] string? branch)
     {

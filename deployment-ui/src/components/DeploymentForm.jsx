@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { deploy } from "../services/deploymentService";
-import { getWorkflowInputs, getLastRun } from "../services/githubService";
+import { getWorkflowInputs, getWorkflowYaml, getLastRun } from "../services/githubService";
 
 import ConfirmDialog from "./ConfirmDialog";
+import YamlViewerDialog from "./YamlViewerDialog";
 import ProgressBar from "./ProgressBar";
 import SearchBox from "./common/SearchBox";
 import ComboBox from "./common/ComboBox";
@@ -55,6 +56,13 @@ export default function DeploymentForm({
     const [lastRunLoading, setLastRunLoading] = useState(false);
 
     const [confirm, setConfirm] = useState(false);
+
+    // "View YAML" dialog — shows the selected workflow file's raw source,
+    // fetched from the same repo-contents call GetWorkflowInputsAsync parses.
+    const [yamlOpen, setYamlOpen] = useState(false);
+    const [yamlLoading, setYamlLoading] = useState(false);
+    const [yamlError, setYamlError] = useState("");
+    const [yamlContent, setYamlContent] = useState("");
 
     /* -----------------------------
        Search States
@@ -261,6 +269,35 @@ export default function DeploymentForm({
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedArtifacts, artifactInput?.name]);
+
+    /* -----------------------------
+       View YAML
+    ------------------------------*/
+
+    function handleViewYaml() {
+
+        if (!workflow) {
+            return;
+        }
+
+        setYamlOpen(true);
+        setYamlLoading(true);
+        setYamlError("");
+        setYamlContent("");
+
+        getWorkflowYaml(workflow, branch)
+            .then((response) => {
+                setYamlContent(response.data?.content || "");
+            })
+            .catch((err) => {
+                console.error(err);
+                setYamlError(err.response?.data?.message || "Unable to load this workflow's YAML file.");
+            })
+            .finally(() => {
+                setYamlLoading(false);
+            });
+
+    }
 
     /* -----------------------------
        Deploy
@@ -716,6 +753,18 @@ export default function DeploymentForm({
 
                     />
 
+                    {workflow && (
+
+                        <button
+                            type="button"
+                            className="btn btn-link"
+                            onClick={handleViewYaml}
+                        >
+                            View YAML
+                        </button>
+
+                    )}
+
                 </div>
 
                 {showInputs && workflow && (
@@ -803,6 +852,17 @@ export default function DeploymentForm({
             />
 
         </div>
+
+            <YamlViewerDialog
+
+                open={yamlOpen}
+                path={workflow}
+                loading={yamlLoading}
+                error={yamlError}
+                content={yamlContent}
+                onClose={() => setYamlOpen(false)}
+
+            />
 
             <ConfirmDialog
 

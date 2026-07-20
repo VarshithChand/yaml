@@ -45,6 +45,10 @@ export const getWorkflowInputs = async (path, branch) => {
     return await api.get("/workflow-inputs", { params: { path, branch } });
 };
 
+export const getWorkflowYaml = async (path, branch) => {
+    return await api.get("/workflow-yaml", { params: { path, branch } });
+};
+
 export const getLastRun = async (workflow, branch) => {
     return await api.get("/workflows/last-run", { params: { workflow, branch } });
 };
