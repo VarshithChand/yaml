@@ -3,6 +3,7 @@ import { useState } from "react";
 import useNavigation from "../../hooks/useNavigation";
 import useAuth from "../../hooks/useAuth";
 import useTheme from "../../hooks/useTheme";
+import AccountAvatar from "../common/AccountAvatar";
 
 import {
     DashboardIcon,
@@ -74,16 +75,6 @@ export default function Sidebar() {
 
             <div className="app-sidebar-head">
 
-                <div className="app-sidebar-avatar" title={displayName || "Not signed in"}>
-
-                    {avatarUrl ? (
-                        <img src={avatarUrl} alt="" />
-                    ) : (
-                        <span>{displayName ? displayName[0].toUpperCase() : "?"}</span>
-                    )}
-
-                </div>
-
                 <button
                     type="button"
                     className="app-sidebar-toggle"
@@ -93,6 +84,8 @@ export default function Sidebar() {
                 >
                     <ChevronIcon direction={collapsed ? "right" : "left"} />
                 </button>
+
+                <AccountAvatar avatarUrl={avatarUrl} name={displayName} size={32} />
 
             </div>
 

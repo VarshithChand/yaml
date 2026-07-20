@@ -428,6 +428,40 @@ textarea{
 
 }
 
+.settings-subsection{
+
+    margin-top:24px;
+
+    padding-top:20px;
+
+    border-top:1px solid var(--border);
+
+}
+
+.settings-subsection:first-of-type{
+
+    margin-top:0;
+
+    padding-top:0;
+
+    border-top:none;
+
+}
+
+.settings-subhead{
+
+    font-family:'Lexend','Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+
+    font-size:15px;
+
+    font-weight:600;
+
+    color:var(--text);
+
+    margin-bottom:12px;
+
+}
+
 /* ==========================================
    BRAND / TOP BAR / INFO ROW / ERRORS
 ========================================== */
@@ -540,13 +574,9 @@ textarea{
 
 }
 
-.app-sidebar-avatar{
+.account-avatar{
 
     flex-shrink:0;
-
-    width:32px;
-
-    height:32px;
 
     border-radius:50%;
 
@@ -568,9 +598,11 @@ textarea{
 
     font-weight:600;
 
+    cursor:default;
+
 }
 
-.app-sidebar-avatar img{
+.account-avatar img{
 
     width:100%;
 
@@ -797,20 +829,6 @@ textarea{
     align-items:center;
 
     gap:8px;
-
-}
-
-.token-owner-avatar{
-
-    width:16px;
-
-    height:16px;
-
-    border-radius:50%;
-
-    vertical-align:middle;
-
-    margin-right:6px;
 
 }
 

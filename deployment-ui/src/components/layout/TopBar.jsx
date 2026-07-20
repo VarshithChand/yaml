@@ -4,6 +4,7 @@ import useAuth from "../../hooks/useAuth";
 import useNavigation from "../../hooks/useNavigation";
 import usePolling from "../../hooks/usePolling";
 import Logo from "../common/Logo";
+import AccountAvatar from "../common/AccountAvatar";
 import { getRateLimit } from "../../services/githubService";
 
 // The slim top strip: brand mark on the left, account/rate-limit controls
@@ -58,9 +59,9 @@ export default function TopBar() {
                                 type="button"
                                 className="account-menu-trigger"
                                 onClick={() => setTab("settings")}
-                                title="Go to Settings"
+                                title={`${user.login} — go to Settings`}
                             >
-                                <span>{user.login}</span>
+                                <AccountAvatar name={user.login} size={26} />
 
                                 <span className={`badge ${user.role === "Admin" ? "badge-success" : "badge-secondary"}`}>
                                     {user.role}
@@ -100,18 +101,11 @@ export default function TopBar() {
 
                                 <button
                                     type="button"
-                                    className="badge badge-success account-menu-trigger"
-                                    title="GitHub Personal Access Token owner — click to go to Settings"
+                                    className="account-menu-trigger"
+                                    title={`${tokenOwner.login} — Personal Access Token owner, click to go to Settings`}
                                     onClick={() => setTab("settings")}
                                 >
-                                    {tokenOwner.avatarUrl && (
-                                        <img
-                                            src={tokenOwner.avatarUrl}
-                                            alt=""
-                                            className="token-owner-avatar"
-                                        />
-                                    )}
-                                    {tokenOwner.login}
+                                    <AccountAvatar avatarUrl={tokenOwner.avatarUrl} name={tokenOwner.login} size={26} />
                                 </button>
 
                             ) : (

@@ -462,13 +462,18 @@ export default function Settings() {
             <div className="card">
 
                 <h2 className="card-title">
-                    GitHub Credentials
+                    Credentials
                 </h2>
 
                 <p className="empty-state" style={{ padding: "0 0 15px", textAlign: "left" }}>
-                    Used by the backend to call the GitHub API on the portal's behalf.
-                    Saved server-side in a gitignored local config file — never stored in the browser.
+                    Everything the backend needs to call GitHub and Docker on the portal's
+                    behalf, saved server-side in a gitignored local config file — never
+                    stored in the browser.
                 </p>
+
+                <div className="settings-subsection">
+
+                <h3 className="settings-subhead">GitHub</h3>
 
                 {githubTokenConfigured && (
 
@@ -620,13 +625,11 @@ export default function Settings() {
 
                 </div>
 
-            </div>
+                </div>
 
-            <div className="card">
+                <div className="settings-subsection">
 
-                <h2 className="card-title">
-                    Docker Registry Credentials
-                </h2>
+                <h3 className="settings-subhead">Docker Registry</h3>
 
                 <p className="empty-state" style={{ padding: "0 0 15px", textAlign: "left" }}>
                     Stored for future use — no build/push step in this portal reads these yet.
@@ -685,13 +688,11 @@ export default function Settings() {
 
                 </div>
 
-            </div>
+                </div>
 
-            <div className="card">
+                <div className="settings-subsection">
 
-                <h2 className="card-title">
-                    GitHub OAuth Login
-                </h2>
+                <h3 className="settings-subhead">GitHub OAuth Login</h3>
 
                 <p className="empty-state" style={{ padding: "0 0 15px", textAlign: "left" }}>
                     From your GitHub OAuth App at github.com/settings/developers. Callback URL must be
@@ -739,13 +740,11 @@ export default function Settings() {
 
                 </div>
 
-            </div>
+                </div>
 
-            <div className="card">
+                <div className="settings-subsection">
 
-                <h2 className="card-title">
-                    Admin Allowlist
-                </h2>
+                <h3 className="settings-subhead">Admin Allowlist</h3>
 
                 <p className="empty-state" style={{ padding: "0 0 15px", textAlign: "left" }}>
                     GitHub usernames that get the Admin role on login. Everyone else who logs in gets Viewer.
@@ -772,6 +771,8 @@ export default function Settings() {
                     <button className="btn btn-danger" onClick={() => handleClear("admins", "admin allowlist")}>
                         Clear
                     </button>
+
+                </div>
 
                 </div>
 
