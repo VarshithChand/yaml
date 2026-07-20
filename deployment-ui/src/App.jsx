@@ -9,6 +9,7 @@ import TemplateTester from "./pages/TemplateTester";
 import Settings from "./pages/Settings";
 
 import TopBar from "./components/layout/TopBar";
+import Sidebar from "./components/layout/Sidebar";
 import Footer from "./components/layout/Footer";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import useNavigation from "./hooks/useNavigation";
@@ -21,23 +22,29 @@ function App(){
 
         <>
 
-            <TopBar />
+            <Sidebar />
 
-            <ErrorBoundary key={tab} onRecover={() => setTab("dashboard")}>
+            <div className="app-content-column">
 
-                {tab === "dashboard" && <Dashboard/>}
-                {tab === "deploy" && <Deploy/>}
-                {tab === "approvals" && <Approvals/>}
-                {tab === "storage" && <Storage/>}
-                {tab === "analytics" && <Analytics/>}
-                {tab === "timeline" && <Timeline/>}
-                {tab === "history" && <History/>}
-                {tab === "templates" && <TemplateTester/>}
-                {tab === "settings" && <Settings/>}
+                <TopBar />
 
-            </ErrorBoundary>
+                <ErrorBoundary key={tab} onRecover={() => setTab("dashboard")}>
 
-            <Footer />
+                    {tab === "dashboard" && <Dashboard/>}
+                    {tab === "deploy" && <Deploy/>}
+                    {tab === "approvals" && <Approvals/>}
+                    {tab === "storage" && <Storage/>}
+                    {tab === "analytics" && <Analytics/>}
+                    {tab === "timeline" && <Timeline/>}
+                    {tab === "history" && <History/>}
+                    {tab === "templates" && <TemplateTester/>}
+                    {tab === "settings" && <Settings/>}
+
+                </ErrorBoundary>
+
+                <Footer />
+
+            </div>
 
         </>
 

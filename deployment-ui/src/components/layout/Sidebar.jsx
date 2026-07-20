@@ -1,0 +1,98 @@
+import { useState } from "react";
+
+import useNavigation from "../../hooks/useNavigation";
+import useAuth from "../../hooks/useAuth";
+
+import {
+    DashboardIcon,
+    DeployIcon,
+    ApprovalsIcon,
+    StorageIcon,
+    AnalyticsIcon,
+    TimelineIcon,
+    HistoryIcon,
+    TemplatesIcon,
+    ChevronIcon
+} from "./SidebarIcons";
+
+const TABS = [
+    { key: "dashboard", label: "Dashboard", Icon: DashboardIcon },
+    { key: "deploy", label: "Deploy", Icon: DeployIcon },
+    { key: "approvals", label: "Approvals", Icon: ApprovalsIcon },
+    { key: "storage", label: "Artifacts & Images", Icon: StorageIcon },
+    { key: "analytics", label: "Analytics", Icon: AnalyticsIcon },
+    { key: "timeline", label: "Timeline", Icon: TimelineIcon },
+    { key: "history", label: "History", Icon: HistoryIcon },
+    { key: "templates", label: "Template Tester", Icon: TemplatesIcon }
+];
+
+const STORAGE_KEY = "sidebar-collapsed";
+
+// Left-hand persistent nav, collapsed to icons-only by default (matches
+// the reference the user pointed at — Google Keep's own left rail) with a
+// small arrow to pull it open, rather than a hamburger button that hides
+// the nav behind a dropdown.
+export default function Sidebar() {
+
+    const { tab, setTab } = useNavigation();
+    const { canApproveReleases } = useAuth();
+
+    const [collapsed, setCollapsed] = useState(() => {
+
+        const stored = localStorage.getItem(STORAGE_KEY);
+        return stored === null ? true : stored === "true";
+
+    });
+
+    const visibleTabs = TABS.filter((t) => t.key !== "approvals" || canApproveReleases);
+
+    function toggleCollapsed() {
+
+        setCollapsed((prev) => {
+
+            const next = !prev;
+            localStorage.setItem(STORAGE_KEY, String(next));
+            return next;
+
+        });
+
+    }
+
+    return (
+
+        <aside className={`app-sidebar ${collapsed ? "collapsed" : ""}`}>
+
+            <button
+                type="button"
+                className="app-sidebar-toggle"
+                onClick={toggleCollapsed}
+                aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+                title={collapsed ? "Expand navigation" : "Collapse navigation"}
+            >
+                <ChevronIcon direction={collapsed ? "right" : "left"} />
+            </button>
+
+            <nav className="app-sidebar-nav">
+
+                {visibleTabs.map(({ key, label, Icon }) => (
+
+                    <button
+                        key={key}
+                        type="button"
+                        className={`app-sidebar-item ${tab === key ? "active" : ""}`}
+                        onClick={() => setTab(key)}
+                        title={collapsed ? label : undefined}
+                    >
+                        <span className="app-sidebar-item-icon"><Icon /></span>
+                        <span className="app-sidebar-item-label">{label}</span>
+                    </button>
+
+                ))}
+
+            </nav>
+
+        </aside>
+
+    );
+
+}

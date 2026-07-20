@@ -1,0 +1,97 @@
+// Deliberately simple geometric icons (rects/circles/lines only, no
+// hand-authored curve paths) so nothing risks rendering as a garbled
+// shape — each one is legible even at 18px.
+
+const common = {
+    width: 18,
+    height: 18,
+    viewBox: "0 0 18 18",
+    fill: "none",
+    "aria-hidden": true
+};
+
+export function DashboardIcon() {
+    return (
+        <svg {...common}>
+            <rect x="2" y="2" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.4" />
+            <rect x="10" y="2" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.4" />
+            <rect x="2" y="10" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.4" />
+            <rect x="10" y="10" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.4" />
+        </svg>
+    );
+}
+
+export function DeployIcon() {
+    return (
+        <svg {...common}>
+            <line x1="9" y1="15" x2="9" y2="4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            <polyline points="4,9 9,3 14,9" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    );
+}
+
+export function ApprovalsIcon() {
+    return (
+        <svg {...common}>
+            <circle cx="9" cy="9" r="7" stroke="currentColor" strokeWidth="1.4" />
+            <polyline points="5.5,9.2 8,11.7 12.5,6.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    );
+}
+
+export function StorageIcon() {
+    return (
+        <svg {...common}>
+            <rect x="2.5" y="4.5" width="13" height="9" rx="1.2" stroke="currentColor" strokeWidth="1.4" />
+            <line x1="2.5" y1="8" x2="15.5" y2="8" stroke="currentColor" strokeWidth="1.2" />
+        </svg>
+    );
+}
+
+export function AnalyticsIcon() {
+    return (
+        <svg {...common}>
+            <rect x="3" y="10" width="3" height="5" stroke="currentColor" strokeWidth="1.4" />
+            <rect x="7.5" y="6" width="3" height="9" stroke="currentColor" strokeWidth="1.4" />
+            <rect x="12" y="3" width="3" height="12" stroke="currentColor" strokeWidth="1.4" />
+        </svg>
+    );
+}
+
+export function TimelineIcon() {
+    return (
+        <svg {...common}>
+            <line x1="2.5" y1="9" x2="15.5" y2="9" stroke="currentColor" strokeWidth="1.4" />
+            <circle cx="4.5" cy="9" r="1.6" fill="currentColor" />
+            <circle cx="9" cy="9" r="1.6" fill="currentColor" />
+            <circle cx="13.5" cy="9" r="1.6" fill="currentColor" />
+        </svg>
+    );
+}
+
+export function HistoryIcon() {
+    return (
+        <svg {...common}>
+            <circle cx="9" cy="9" r="7" stroke="currentColor" strokeWidth="1.4" />
+            <polyline points="9,5 9,9 12,11" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    );
+}
+
+export function TemplatesIcon() {
+    return (
+        <svg {...common}>
+            <polyline points="6.5,5 2.5,9 6.5,13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <polyline points="11.5,5 15.5,9 11.5,13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    );
+}
+
+export function ChevronIcon({ direction = "left" }) {
+    return (
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"
+            style={{ transform: direction === "right" ? "rotate(180deg)" : "none" }}>
+            <polyline points="9,2 4,7 9,12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    );
+}

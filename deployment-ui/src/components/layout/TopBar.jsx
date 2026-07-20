@@ -7,36 +7,17 @@ import usePolling from "../../hooks/usePolling";
 import Logo from "../common/Logo";
 import { getRateLimit } from "../../services/githubService";
 
-const TABS = [
-    { key: "dashboard", label: "Dashboard" },
-    { key: "deploy", label: "Deploy" },
-    { key: "approvals", label: "Approvals" },
-    { key: "storage", label: "Artifacts & Images" },
-    { key: "analytics", label: "Analytics" },
-    { key: "timeline", label: "Timeline" },
-    { key: "history", label: "History" },
-    { key: "templates", label: "Template Tester" }
-];
-
-// The single persistent header: brand, primary nav, and account/theme
-// controls all in one bar, present on every page — not a separate nav
-// strip plus a per-page header that only some pages happened to render.
-// Below the collapse breakpoint (see .top-bar-menu-toggle in global.css)
-// the nav + actions move into a dropdown panel behind a menu button
-// instead of wrapping onto extra rows in an uncontrolled way.
+// The slim top strip: brand mark on the left, account/theme/rate-limit
+// controls on the right. Primary navigation lives in Sidebar now, not
+// here — this bar only ever holds a handful of controls, so it doesn't
+// need its own collapse/hamburger behavior, just normal flex-wrap.
 export default function TopBar() {
 
     const { theme, toggleTheme } = useTheme();
-    const { user, loading, login, logout, oauthConfigured, tokenOwner, canApproveReleases } = useAuth();
-    const { tab, setTab } = useNavigation();
+    const { user, loading, login, logout, oauthConfigured, tokenOwner } = useAuth();
+    const { setTab } = useNavigation();
 
     const [rateLimit, setRateLimit] = useState(null);
-    const [menuOpen, setMenuOpen] = useState(false);
-
-    // The Approvals tab only makes sense for someone whose token can
-    // actually approve a deployment (repo-admin access) — everyone else
-    // never sees it, rather than seeing it and hitting a "no access" wall.
-    const visibleTabs = TABS.filter((t) => t.key !== "approvals" || canApproveReleases);
 
     async function loadRateLimit() {
 
@@ -59,13 +40,6 @@ export default function TopBar() {
     // usePolling fires once immediately on mount, then on the interval.
     usePolling(loadRateLimit, 30000);
 
-    function handleTabClick(key) {
-
-        setTab(key);
-        setMenuOpen(false);
-
-    }
-
     return (
 
         <header className="top-bar">
@@ -74,121 +48,91 @@ export default function TopBar() {
                 <Logo showEyebrow={false} size={32} />
             </div>
 
-            <button
-                type="button"
-                className="top-bar-menu-toggle"
-                aria-label={menuOpen ? "Close menu" : "Open menu"}
-                aria-expanded={menuOpen}
-                onClick={() => setMenuOpen((open) => !open)}
-            >
-                {menuOpen ? "✕" : "☰"}
-            </button>
+            <div className="top-bar-actions">
 
-            <div className={`top-bar-collapsible ${menuOpen ? "open" : ""}`}>
+                {!loading && (
 
-                <nav className="app-nav">
+                    user ? (
 
-                    {visibleTabs.map((t) => (
+                        <div className="user-badge">
 
-                        <button
-                            key={t.key}
-                            className={`nav-tab ${tab === t.key ? "active" : ""}`}
-                            onClick={() => handleTabClick(t.key)}
-                        >
-                            {t.label}
+                            <button
+                                type="button"
+                                className="account-menu-trigger"
+                                onClick={() => setTab("settings")}
+                                title="Go to Settings"
+                            >
+                                <span>{user.login}</span>
+
+                                <span className={`badge ${user.role === "Admin" ? "badge-success" : "badge-secondary"}`}>
+                                    {user.role}
+                                </span>
+                            </button>
+
+                            <button className="theme-toggle" onClick={logout}>
+                                Logout
+                            </button>
+
+                        </div>
+
+                    ) : oauthConfigured ? (
+
+                        <button className="theme-toggle" onClick={login}>
+                            Login with GitHub
                         </button>
 
-                    ))}
+                    ) : (
 
-                </nav>
+                        <div className="user-badge">
 
-                <div className="top-bar-actions">
+                            <span className="badge badge-secondary">
+                                Public view
+                            </span>
 
-                    {!loading && (
+                            {rateLimit && (
+                                <span
+                                    className={`badge ${rateLimit.remaining <= 10 ? "badge-danger" : "badge-info"}`}
+                                    title={`GitHub API requests remaining this hour — resets at ${new Date(rateLimit.resetAt).toLocaleTimeString()}`}
+                                >
+                                    {rateLimit.remaining}/{rateLimit.limit}
+                                </span>
+                            )}
 
-                        user ? (
-
-                            <div className="user-badge">
+                            {tokenOwner?.configured ? (
 
                                 <button
                                     type="button"
-                                    className="account-menu-trigger"
-                                    onClick={() => handleTabClick("settings")}
-                                    title="Go to Settings"
+                                    className="badge badge-success account-menu-trigger"
+                                    title="GitHub Personal Access Token owner — click to go to Settings"
+                                    onClick={() => setTab("settings")}
                                 >
-                                    <span>{user.login}</span>
-
-                                    <span className={`badge ${user.role === "Admin" ? "badge-success" : "badge-secondary"}`}>
-                                        {user.role}
-                                    </span>
+                                    {tokenOwner.avatarUrl && (
+                                        <img
+                                            src={tokenOwner.avatarUrl}
+                                            alt=""
+                                            className="token-owner-avatar"
+                                        />
+                                    )}
+                                    {tokenOwner.login}
                                 </button>
 
-                                <button className="theme-toggle" onClick={logout}>
-                                    Logout
+                            ) : (
+
+                                <button className="theme-toggle" onClick={() => setTab("settings")}>
+                                    Set up GitHub Login
                                 </button>
 
-                            </div>
+                            )}
 
-                        ) : oauthConfigured ? (
+                        </div>
 
-                            <button className="theme-toggle" onClick={login}>
-                                Login with GitHub
-                            </button>
+                    )
 
-                        ) : (
+                )}
 
-                            <div className="user-badge">
-
-                                <span className="badge badge-secondary">
-                                    Public view
-                                </span>
-
-                                {rateLimit && (
-                                    <span
-                                        className={`badge ${rateLimit.remaining <= 10 ? "badge-danger" : "badge-info"}`}
-                                        title={`GitHub API requests remaining this hour — resets at ${new Date(rateLimit.resetAt).toLocaleTimeString()}`}
-                                    >
-                                        {rateLimit.remaining}/{rateLimit.limit}
-                                    </span>
-                                )}
-
-                                {tokenOwner?.configured ? (
-
-                                    <button
-                                        type="button"
-                                        className="badge badge-success account-menu-trigger"
-                                        title="GitHub Personal Access Token owner — click to go to Settings"
-                                        onClick={() => handleTabClick("settings")}
-                                    >
-                                        {tokenOwner.avatarUrl && (
-                                            <img
-                                                src={tokenOwner.avatarUrl}
-                                                alt=""
-                                                className="token-owner-avatar"
-                                            />
-                                        )}
-                                        {tokenOwner.login}
-                                    </button>
-
-                                ) : (
-
-                                    <button className="theme-toggle" onClick={() => handleTabClick("settings")}>
-                                        Set up GitHub Login
-                                    </button>
-
-                                )}
-
-                            </div>
-
-                        )
-
-                    )}
-
-                    <button className="theme-toggle" onClick={toggleTheme}>
-                        {theme === "dark" ? "Light Mode" : "Dark Mode"}
-                    </button>
-
-                </div>
+                <button className="theme-toggle" onClick={toggleTheme}>
+                    {theme === "dark" ? "Light Mode" : "Dark Mode"}
+                </button>
 
             </div>
 

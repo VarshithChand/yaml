@@ -101,8 +101,15 @@ body{
    gap of bare background. */
 #root{
     display:flex;
-    flex-direction:column;
+    flex-direction:row;
     min-height:100vh;
+}
+
+.app-content-column{
+    display:flex;
+    flex-direction:column;
+    flex:1;
+    min-width:0;
 }
 
 .main,
@@ -443,6 +450,204 @@ textarea{
 
 }
 
+/* ==========================================
+   SIDEBAR (PRIMARY NAV)
+========================================== */
+
+.app-sidebar{
+
+    flex-shrink:0;
+
+    display:flex;
+
+    flex-direction:column;
+
+    width:220px;
+
+    background:var(--card-bg);
+
+    border-right:1px solid var(--border);
+
+    position:sticky;
+
+    top:0;
+
+    height:100vh;
+
+    overflow-y:auto;
+
+    transition:width .18s ease;
+
+}
+
+.app-sidebar.collapsed{
+
+    width:60px;
+
+}
+
+.app-sidebar-toggle{
+
+    flex-shrink:0;
+
+    align-self:flex-end;
+
+    margin:12px;
+
+    width:28px;
+
+    height:28px;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    background:none;
+
+    border:1px solid var(--border);
+
+    border-radius:50%;
+
+    color:var(--text-muted);
+
+    cursor:pointer;
+
+    transition:background-color .15s ease, color .15s ease;
+
+}
+
+.app-sidebar.collapsed .app-sidebar-toggle{
+
+    align-self:center;
+
+}
+
+.app-sidebar-toggle:hover{
+
+    background:var(--table-row-hover);
+
+    color:var(--text);
+
+}
+
+.app-sidebar-nav{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:2px;
+
+    padding:0 10px 16px;
+
+}
+
+.app-sidebar-item{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:12px;
+
+    width:100%;
+
+    padding:10px 12px;
+
+    border:none;
+
+    border-radius:8px;
+
+    background:none;
+
+    color:var(--text-muted);
+
+    font-size:14px;
+
+    font-weight:600;
+
+    text-align:left;
+
+    cursor:pointer;
+
+    white-space:nowrap;
+
+    overflow:hidden;
+
+    transition:background-color .15s ease, color .15s ease;
+
+}
+
+.app-sidebar-item:hover{
+
+    background:var(--table-row-hover);
+
+    color:var(--text);
+
+}
+
+.app-sidebar-item.active{
+
+    background:#2563eb;
+
+    color:#ffffff;
+
+}
+
+.app-sidebar-item-icon{
+
+    flex-shrink:0;
+
+    display:flex;
+
+}
+
+.app-sidebar.collapsed .app-sidebar-item{
+
+    justify-content:center;
+
+    padding:10px;
+
+}
+
+.app-sidebar.collapsed .app-sidebar-item-label{
+
+    display:none;
+
+}
+
+@media(max-width:768px){
+
+    .app-sidebar{
+
+        width:60px;
+
+    }
+
+    .app-sidebar .app-sidebar-item-label{
+
+        display:none;
+
+    }
+
+    .app-sidebar .app-sidebar-item{
+
+        justify-content:center;
+
+        padding:10px;
+
+    }
+
+    .app-sidebar-toggle{
+
+        display:none;
+
+    }
+
+}
+
 .top-bar{
 
     position:sticky;
@@ -455,7 +660,9 @@ textarea{
 
     align-items:center;
 
-    gap:16px;
+    flex-wrap:wrap;
+
+    gap:12px 16px;
 
     padding:10px 24px;
 
@@ -476,44 +683,6 @@ textarea{
 .top-bar-brand .logo-title{
 
     font-size:17px;
-
-}
-
-/* Wraps nav + actions so both can collapse into one dropdown panel below
-   the breakpoint, instead of each wrapping onto its own extra row. */
-.top-bar-collapsible{
-
-    display:flex;
-
-    align-items:center;
-
-    gap:16px;
-
-    flex:1;
-
-    min-width:0;
-
-}
-
-.top-bar-menu-toggle{
-
-    display:none;
-
-    background:transparent;
-
-    border:1px solid var(--border);
-
-    border-radius:8px;
-
-    color:var(--text);
-
-    font-size:18px;
-
-    line-height:1;
-
-    padding:8px 14px;
-
-    margin-left:auto;
 
 }
 
@@ -2133,74 +2302,6 @@ textarea{
 }
 
 /* ==========================================
-   APP NAV
-========================================== */
-
-.app-nav{
-
-    display:flex;
-
-    gap:6px;
-
-    padding:0;
-
-    flex-wrap:nowrap;
-
-    overflow-x:auto;
-
-}
-
-.nav-tab{
-
-    background:transparent;
-
-    border:1px solid var(--border);
-
-    color:var(--text-muted);
-
-    border-radius:8px;
-
-    padding:8px 14px;
-
-    font-size:13.5px;
-
-    font-weight:600;
-
-    white-space:nowrap;
-
-    flex-shrink:0;
-
-    transition:background-color .2s ease, border-color .2s ease, color .2s ease, transform .15s ease;
-
-}
-
-.nav-tab:hover{
-
-    background:var(--table-row-hover);
-
-    transform:translateY(-1px);
-
-}
-
-.nav-tab:active{
-
-    transform:translateY(0) scale(.96);
-
-}
-
-.nav-tab.active{
-
-    background:var(--heading-accent);
-
-    border-color:var(--heading-accent);
-
-    box-shadow:0 4px 14px rgba(37,99,235,.35);
-
-    color:white;
-
-}
-
-/* ==========================================
    THEME TOGGLE
 ========================================== */
 
@@ -2256,51 +2357,11 @@ textarea{
    RESPONSIVE
 ========================================== */
 
-/* Below this, the logo + 7 nav tabs + action badges/buttons no longer fit
-   on one row — collapse nav + actions into a dropdown behind a menu button
-   instead of letting them wrap onto uncontrolled extra rows. */
-@media(max-width:1650px){
-
-    .top-bar-menu-toggle{
-        display:block;
-    }
-
-    .top-bar-collapsible{
-        display:none;
-        flex-direction:column;
-        align-items:stretch;
-        gap:16px;
-        position:absolute;
-        top:100%;
-        left:0;
-        right:0;
-        background:var(--card-bg);
-        border-bottom:1px solid var(--border);
-        box-shadow:0 8px 20px var(--card-shadow);
-        padding:16px 24px;
-        max-height:calc(100vh - 60px);
-        overflow-y:auto;
-    }
-
-    .top-bar-collapsible.open{
-        display:flex;
-    }
-
-    .app-nav{
-        flex-direction:column;
-        overflow-x:visible;
-    }
-
-    .nav-tab{
-        width:100%;
-        text-align:left;
-    }
-
-    .top-bar-actions{
-        flex-direction:column;
-        align-items:stretch;
-        margin-left:0;
-    }
+/* Primary nav lives in the sidebar now (which collapses to icons-only on
+   its own), so the top bar only ever holds a logo + a handful of account
+   controls — .top-bar's own flex-wrap lets .top-bar-actions drop to its
+   own row on narrow screens without needing a dropdown. */
+@media(max-width:576px){
 
     .user-badge{
         flex-wrap:wrap;
