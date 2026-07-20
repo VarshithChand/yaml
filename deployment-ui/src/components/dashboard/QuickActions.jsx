@@ -23,33 +23,36 @@ export default function QuickActions({
 
             </h2>
 
-            <button
-
-                className="btn btn-primary"
-
-                onClick={refresh}
-
-            >
-
-                Refresh Dashboard
-
-            </button>
-
-            {githubTokenConfigured && (
+            <div className="quick-actions-buttons">
 
                 <button
 
                     className="btn btn-primary"
-                    style={{ marginTop: "10px" }}
-                    onClick={() => setSwitchOpen(true)}
+
+                    onClick={refresh}
 
                 >
 
-                    Switch Repository
+                    Refresh Dashboard
 
                 </button>
 
-            )}
+                {githubTokenConfigured && (
+
+                    <button
+
+                        className="btn btn-primary"
+                        onClick={() => setSwitchOpen(true)}
+
+                    >
+
+                        Switch Repository
+
+                    </button>
+
+                )}
+
+            </div>
 
             <SwitchRepositoryModal
 
