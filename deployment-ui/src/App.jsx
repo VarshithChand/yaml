@@ -9,6 +9,7 @@ import TemplateTester from "./pages/TemplateTester";
 import Settings from "./pages/Settings";
 
 import TopBar from "./components/layout/TopBar";
+import Footer from "./components/layout/Footer";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import useNavigation from "./hooks/useNavigation";
 
@@ -35,6 +36,8 @@ function App(){
                 {tab === "settings" && <Settings/>}
 
             </ErrorBoundary>
+
+            <Footer />
 
         </>
 
