@@ -368,6 +368,8 @@ export default function Settings() {
                         placeholder="https://github.com/owner/repo"
                         value={githubRepoUrl}
                         onChange={(e) => setGithubRepoUrl(e.target.value)}
+                        autoComplete="off"
+                        name="repository-url"
                     />
                     {githubRepoUrl.trim() && (
 
@@ -447,6 +449,7 @@ export default function Settings() {
                         value={githubToken}
                         onChange={(e) => setGithubToken(e.target.value)}
                         disabled={githubTokenConfigured}
+                        autoComplete="new-password"
                     />
                     {!githubTokenConfigured && (
                         <a
@@ -493,6 +496,8 @@ export default function Settings() {
                         placeholder="docker.io / ghcr.io / your-registry.com"
                         value={dockerRegistry}
                         onChange={(e) => setDockerRegistry(e.target.value)}
+                        autoComplete="off"
+                        name="docker-registry"
                     />
                 </div>
 
@@ -502,6 +507,8 @@ export default function Settings() {
                         className="form-control"
                         value={dockerUsername}
                         onChange={(e) => setDockerUsername(e.target.value)}
+                        autoComplete="off"
+                        name="docker-username"
                     />
                 </div>
 
@@ -519,6 +526,7 @@ export default function Settings() {
                         placeholder={dockerPasswordConfigured ? "Leave blank to keep current password" : ""}
                         value={dockerPassword}
                         onChange={(e) => setDockerPassword(e.target.value)}
+                        autoComplete="new-password"
                     />
                 </div>
 
@@ -553,6 +561,8 @@ export default function Settings() {
                         className="form-control"
                         value={oauthClientId}
                         onChange={(e) => setOauthClientId(e.target.value)}
+                        autoComplete="off"
+                        name="oauth-client-id"
                     />
                 </div>
 
@@ -570,6 +580,7 @@ export default function Settings() {
                         placeholder={oauthClientSecretConfigured ? "Leave blank to keep current secret" : ""}
                         value={oauthClientSecret}
                         onChange={(e) => setOauthClientSecret(e.target.value)}
+                        autoComplete="new-password"
                     />
                 </div>
 
@@ -604,6 +615,8 @@ export default function Settings() {
                         placeholder="octocat, hubot"
                         value={adminUsernamesText}
                         onChange={(e) => setAdminUsernamesText(e.target.value)}
+                        autoComplete="off"
+                        name="admin-usernames"
                     />
                 </div>
 
