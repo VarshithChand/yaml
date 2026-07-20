@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import usePolling from "../hooks/usePolling";
+import usePagination from "../hooks/usePagination";
 import { getPendingApprovals, submitApprovalDecision, getApprovalHistory } from "../services/approvalsService";
 import useAuth from "../hooks/useAuth";
 import useNavigation from "../hooks/useNavigation";
@@ -8,6 +9,7 @@ import useToast from "../hooks/useToast";
 import LoadingSpinner from "../components/LoadingSpinner";
 import PageLayout from "../components/layout/PageLayout";
 import StatusBadge from "../components/StatusBadge";
+import Pagination from "../components/common/Pagination";
 
 export default function Approvals() {
 
@@ -153,6 +155,17 @@ export default function Approvals() {
     // redirect-away effect above is about to fire) — show a spinner rather
     // than flashing the "add a token" message at someone who already has one.
     const resolvingAccess = githubTokenConfigured && !tokenOwner;
+
+    // Matches the page size every other artifact/run table in the app uses.
+    const {
+        page: historyPage,
+        setPage: setHistoryPage,
+        pageCount: historyPageCount,
+        pageItems: historyPageItems,
+        totalCount: historyTotalCount,
+        startIndex: historyStartIndex,
+        endIndex: historyEndIndex
+    } = usePagination(history, 10);
 
     if (loading || resolvingAccess || (githubTokenConfigured && !canApproveReleases)) {
         return <LoadingSpinner />;
@@ -307,7 +320,7 @@ export default function Approvals() {
 
                             <tbody>
 
-                                {history.map((run) => (
+                                {historyPageItems.map((run) => (
 
                                     <tr key={run.id}>
                                         <td>{run.name}</td>
@@ -326,6 +339,15 @@ export default function Approvals() {
                         </div>
 
                     )}
+
+                    <Pagination
+                        page={historyPage}
+                        pageCount={historyPageCount}
+                        totalCount={historyTotalCount}
+                        startIndex={historyStartIndex}
+                        endIndex={historyEndIndex}
+                        onPageChange={setHistoryPage}
+                    />
 
                 </div>
 

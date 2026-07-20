@@ -1,9 +1,11 @@
 import { useState } from "react";
 
 import usePolling from "../hooks/usePolling";
+import usePagination from "../hooks/usePagination";
 import { getWorkflowRuns } from "../services/historyService";
 import LoadingSpinner from "../components/LoadingSpinner";
 import PageLayout from "../components/layout/PageLayout";
+import Pagination from "../components/common/Pagination";
 
 function dotClass(run) {
 
@@ -42,6 +44,11 @@ export default function Timeline() {
     // polls continuously for as long as the Timeline page stays open.
     usePolling(load, 30000);
 
+    // 15/page — matches History, which paginates this same underlying
+    // list of runs (GetWorkflowRuns can return up to 100 at once).
+    const { page, setPage, pageCount, pageItems, totalCount, startIndex, endIndex } =
+        usePagination(runs, 15);
+
     if (loading) {
         return <LoadingSpinner />;
     }
@@ -60,7 +67,7 @@ export default function Timeline() {
 
                     <div className="timeline">
 
-                        {runs.map((run) => (
+                        {pageItems.map((run) => (
 
                             <div className="timeline-item" key={run.id}>
 
@@ -81,6 +88,15 @@ export default function Timeline() {
                     </div>
 
                 )}
+
+                <Pagination
+                    page={page}
+                    pageCount={pageCount}
+                    totalCount={totalCount}
+                    startIndex={startIndex}
+                    endIndex={endIndex}
+                    onPageChange={setPage}
+                />
 
             </div>
 
