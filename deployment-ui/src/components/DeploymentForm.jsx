@@ -7,6 +7,7 @@ import YamlViewerDialog from "./YamlViewerDialog";
 import ProgressBar from "./ProgressBar";
 import SearchBox from "./common/SearchBox";
 import ComboBox from "./common/ComboBox";
+import ClearableInput from "./common/ClearableInput";
 import DeploymentSummary from "./deployment/DeploymentSummary";
 import DeploymentProgress from "./deployment/DeploymentProgress";
 
@@ -518,15 +519,14 @@ export default function DeploymentForm({
 
                 <label>Docker Image</label>
 
-                <input
-
-                    className="form-control"
+                <ClearableInput
 
                     placeholder="registry/repository:tag"
 
                     value={inputValues[input.name] ?? ""}
 
                     onChange={(e) => setInputValue(input.name, e.target.value)}
+                    onClear={() => setInputValue(input.name, "")}
 
                 />
 
@@ -618,11 +618,11 @@ export default function DeploymentForm({
                     {input.required && " *"}
                 </label>
 
-                <input
-                    className="form-control"
+                <ClearableInput
                     placeholder={input.description || ""}
                     value={value}
                     onChange={(e) => setInputValue(input.name, e.target.value)}
+                    onClear={() => setInputValue(input.name, "")}
                 />
 
             </div>

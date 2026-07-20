@@ -10,19 +10,37 @@ export default function SearchBox({
 
     return (
 
-        <input
+        <div className="clearable-input-wrap">
 
-            type="text"
+            <input
 
-            className="form-control search-inline"
+                type="text"
 
-            placeholder={placeholder}
+                className="form-control search-inline"
 
-            value={value}
+                placeholder={placeholder}
 
-            onChange={(e) => onChange(e.target.value)}
+                value={value}
 
-        />
+                onChange={(e) => onChange(e.target.value)}
+
+            />
+
+            {value && (
+
+                <button
+                    type="button"
+                    className="clearable-input-btn"
+                    aria-label="Clear"
+                    tabIndex={-1}
+                    onClick={() => onChange("")}
+                >
+                    &times;
+                </button>
+
+            )}
+
+        </div>
 
     );
 

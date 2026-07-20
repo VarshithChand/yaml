@@ -70,18 +70,44 @@ export default function ComboBox({
 
     }
 
+    function handleClear() {
+
+        setInputValue("");
+        onChange("");
+        setOpen(false);
+
+    }
+
     return (
 
         <div className="combobox" ref={containerRef}>
 
-            <input
-                type="text"
-                className="form-control"
-                placeholder={placeholder}
-                value={inputValue}
-                onChange={handleInputChange}
-                onFocus={() => setOpen(true)}
-            />
+            <div className="clearable-input-wrap">
+
+                <input
+                    type="text"
+                    className="form-control"
+                    placeholder={placeholder}
+                    value={inputValue}
+                    onChange={handleInputChange}
+                    onFocus={() => setOpen(true)}
+                />
+
+                {inputValue && (
+
+                    <button
+                        type="button"
+                        className="clearable-input-btn"
+                        aria-label="Clear"
+                        tabIndex={-1}
+                        onClick={handleClear}
+                    >
+                        &times;
+                    </button>
+
+                )}
+
+            </div>
 
             {open && (
 
