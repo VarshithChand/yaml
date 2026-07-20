@@ -10,14 +10,17 @@ import {
     previewGitHubRepository
 } from "../services/settingsService";
 import { getAccountRepositories } from "../services/githubService";
+import { getLogs } from "../services/logsService";
 
 import LoadingSpinner from "../components/LoadingSpinner";
 import PageLayout from "../components/layout/PageLayout";
 import ComboBox from "../components/common/ComboBox";
 import ClearableInput from "../components/common/ClearableInput";
+import Pagination from "../components/common/Pagination";
 import useToast from "../hooks/useToast";
 import useAuth from "../hooks/useAuth";
 import useNavigation from "../hooks/useNavigation";
+import usePagination from "../hooks/usePagination";
 import parseRepoUrl from "../utils/parseRepoUrl";
 
 export default function Settings() {
@@ -63,6 +66,9 @@ export default function Settings() {
     const [oauthClientSecretConfigured, setOauthClientSecretConfigured] = useState(false);
 
     const [adminUsernamesText, setAdminUsernamesText] = useState("");
+
+    const [logs, setLogs] = useState([]);
+    const [logsLoading, setLogsLoading] = useState(true);
 
     async function load() {
 
@@ -119,6 +125,29 @@ export default function Settings() {
         init();
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    useEffect(() => {
+
+        let cancelled = false;
+
+        getLogs()
+            .then((response) => {
+                if (!cancelled) {
+                    setLogs(Array.isArray(response.data) ? response.data : []);
+                }
+            })
+            .catch((err) => console.error(err))
+            .finally(() => {
+                if (!cancelled) {
+                    setLogsLoading(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+
     }, []);
 
     useEffect(() => {
@@ -411,6 +440,16 @@ export default function Settings() {
         }
 
     }
+
+    const {
+        page: logsPage,
+        setPage: setLogsPage,
+        pageCount: logsPageCount,
+        pageItems: logsPageItems,
+        totalCount: logsTotalCount,
+        startIndex: logsStartIndex,
+        endIndex: logsEndIndex
+    } = usePagination(logs, 10);
 
     if (loading) {
         return <LoadingSpinner />;
@@ -735,6 +774,80 @@ export default function Settings() {
                     </button>
 
                 </div>
+
+            </div>
+
+            <div className="card">
+
+                <h2 className="card-title">
+                    Activity Log
+                </h2>
+
+                <p className="empty-state" style={{ padding: "0 0 15px", textAlign: "left" }}>
+                    Recent settings changes and backend errors — kept in memory on the
+                    server, cleared on restart.
+                </p>
+
+                {logsLoading ? (
+
+                    <p className="field-hint">Loading activity log...</p>
+
+                ) : logs.length === 0 ? (
+
+                    <p className="empty-state">No activity recorded yet.</p>
+
+                ) : (
+
+                    <div className="table-scroll">
+
+                    <table className="table">
+
+                        <thead>
+                            <tr>
+                                <th>When</th>
+                                <th>Level</th>
+                                <th>Category</th>
+                                <th>Message</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            {logsPageItems.map((entry, i) => (
+
+                                <tr key={`${entry.timestamp}-${i}`}>
+                                    <td>{new Date(entry.timestamp).toLocaleString()}</td>
+                                    <td>
+                                        <span className={`badge ${entry.level === "Error" ? "badge-danger" : "badge-info"}`}>
+                                            {entry.level}
+                                        </span>
+                                    </td>
+                                    <td>{entry.category}</td>
+                                    <td>{entry.message}</td>
+                                </tr>
+
+                            ))}
+
+                        </tbody>
+
+                    </table>
+
+                    </div>
+
+                )}
+
+                {!logsLoading && (
+
+                    <Pagination
+                        page={logsPage}
+                        pageCount={logsPageCount}
+                        totalCount={logsTotalCount}
+                        startIndex={logsStartIndex}
+                        endIndex={logsEndIndex}
+                        onPageChange={setLogsPage}
+                    />
+
+                )}
 
             </div>
 

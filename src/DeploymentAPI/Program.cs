@@ -74,6 +74,7 @@ builder.Services.AddMemoryCache();
 // Dependency Injection
 //
 builder.Services.AddSingleton<GitHubAuthService>();
+builder.Services.AddSingleton<ActivityLogService>();
 builder.Services.AddScoped<GitHubApiService>();
 builder.Services.AddScoped<DeploymentService>();
 builder.Services.AddScoped<NotificationService>();
@@ -143,7 +144,11 @@ var app = builder.Build();
 //
 // Error handling — surface GitHub API failures (rate limits, 404s, etc.) as a
 // clean JSON message instead of an unhandled 500 with no body reaching the UI.
+// Also the one place every request passes through, so it's where failures
+// get recorded for the Settings page's activity log.
 //
+var activityLog = app.Services.GetRequiredService<ActivityLogService>();
+
 app.Use(async (context, next) =>
 {
     try
@@ -152,9 +157,19 @@ app.Use(async (context, next) =>
     }
     catch (HttpRequestException ex)
     {
+        activityLog.LogError("GitHub API", ex.Message);
+
         context.Response.StatusCode = (int?)ex.StatusCode ?? StatusCodes.Status502BadGateway;
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsJsonAsync(new { message = ex.Message });
+    }
+    catch (Exception ex)
+    {
+        // Logged, then rethrown unchanged — this middleware isn't meant to
+        // change how unexpected errors are handled, only to make sure
+        // they're visible somewhere besides the server's own console.
+        activityLog.LogError("Server", ex.Message);
+        throw;
     }
 });
 

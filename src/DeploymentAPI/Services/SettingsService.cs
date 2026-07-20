@@ -9,8 +9,9 @@ namespace DeploymentAPI.Services;
 public class SettingsService
 {
     private readonly string _localSettingsPath;
+    private readonly ActivityLogService _log;
 
-    public SettingsService(IHostEnvironment env)
+    public SettingsService(IHostEnvironment env, ActivityLogService log)
     {
         // SETTINGS_FILE_PATH lets a deployment point this at a mounted
         // persistent volume (e.g. Fly.io) instead of the app's own content
@@ -22,6 +23,8 @@ public class SettingsService
         _localSettingsPath = string.IsNullOrWhiteSpace(overridePath)
             ? Path.Combine(env.ContentRootPath, "appsettings.Local.json")
             : overridePath;
+
+        _log = log;
     }
 
     public async Task<SettingsViewDto> GetViewAsync()
@@ -46,6 +49,9 @@ public class SettingsService
 
         await WriteRootAsync(root);
 
+        _log.LogInfo("Settings", $"GitHub settings saved: {update.Owner}/{update.Repository}"
+            + (string.IsNullOrWhiteSpace(update.PersonalAccessToken) ? "" : " (token updated)"));
+
         return BuildView(root);
     }
 
@@ -65,6 +71,9 @@ public class SettingsService
 
         await WriteRootAsync(root);
 
+        _log.LogInfo("Settings", $"Docker settings saved: {update.Registry}/{update.Username}"
+            + (string.IsNullOrWhiteSpace(update.Password) ? "" : " (password updated)"));
+
         return BuildView(root);
     }
 
@@ -83,6 +92,9 @@ public class SettingsService
 
         await WriteRootAsync(root);
 
+        _log.LogInfo("Settings", $"GitHub OAuth settings saved: client ID {update.ClientId}"
+            + (string.IsNullOrWhiteSpace(update.ClientSecret) ? "" : " (secret updated)"));
+
         return BuildView(root);
     }
 
@@ -97,6 +109,8 @@ public class SettingsService
         root["Auth"] = auth;
 
         await WriteRootAsync(root);
+
+        _log.LogInfo("Settings", $"Admin allowlist saved: {string.Join(", ", update.AdminGitHubUsernames)}");
 
         return BuildView(root);
     }
@@ -128,6 +142,8 @@ public class SettingsService
 
         await WriteRootAsync(root);
 
+        _log.LogInfo("Settings", "All settings cleared — portal reset to unconfigured state.");
+
         return BuildView(root);
     }
 
@@ -151,6 +167,8 @@ public class SettingsService
         }
 
         await WriteRootAsync(root);
+
+        _log.LogInfo("Settings", $"{info.SectionKey} section cleared ({section}).");
 
         return BuildView(root);
     }
