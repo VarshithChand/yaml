@@ -482,7 +482,7 @@ textarea{
 
 }
 
-.info-row span{
+.info-row > span{
 
     color:var(--text-muted);
 

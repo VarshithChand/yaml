@@ -55,71 +55,33 @@ export default function DeploymentSummary({
 
             </h2>
 
-            <div className="table-scroll">
-
-            <table className="table">
-
-                <tbody>
-
-                    <tr>
-
-                        <td><strong>Mode</strong></td>
-
-                        <td>
-
-                            <span className={`badge ${showInputs ? "badge-info" : "badge-secondary"}`}>
-                                {mode}
-                            </span>
-
-                        </td>
-
-                    </tr>
-
-                    <tr>
-
-                        <td><strong>Branch</strong></td>
-
-                        <td>
-
-                            {branch || "-"}
-
-                        </td>
-
-                    </tr>
-
-                    <tr>
-
-                        <td><strong>Workflow</strong></td>
-
-                        <td>
-
-                            {workflow || "-"}
-
-                        </td>
-
-                    </tr>
-
-                    {showInputs && (workflowInputs || []).map((input) => (
-
-                        <tr key={input.name}>
-
-                            <td><strong>{formatInputLabel(input.name)}</strong></td>
-
-                            <td>
-
-                                {formatInputValue(input, inputValues?.[input.name])}
-
-                            </td>
-
-                        </tr>
-
-                    ))}
-
-                </tbody>
-
-            </table>
-
+            <div className="info-row">
+                <span>Mode</span>
+                <strong>
+                    <span className={`badge ${showInputs ? "badge-info" : "badge-secondary"}`}>
+                        {mode}
+                    </span>
+                </strong>
             </div>
+
+            <div className="info-row">
+                <span>Branch</span>
+                <strong>{branch || "-"}</strong>
+            </div>
+
+            <div className="info-row">
+                <span>Workflow</span>
+                <strong>{workflow || "-"}</strong>
+            </div>
+
+            {showInputs && (workflowInputs || []).map((input) => (
+
+                <div className="info-row" key={input.name}>
+                    <span>{formatInputLabel(input.name)}</span>
+                    <strong>{formatInputValue(input, inputValues?.[input.name])}</strong>
+                </div>
+
+            ))}
 
             {workflow && (
 
@@ -141,63 +103,53 @@ export default function DeploymentSummary({
 
                     {!lastRunLoading && run && (
 
-                        <div className="table-scroll">
+                        <>
 
-                        <table className="table">
-
-                            <tbody>
-
-                                <tr>
-                                    <td><strong>Status</strong></td>
-                                    <td>
-                                        <StatusBadge status={run.status === "completed" ? run.conclusion : run.status} />
-                                    </td>
-                                </tr>
-
-                                <tr>
-                                    <td><strong>Triggered by</strong></td>
-                                    <td>{run.triggeredBy || "-"}</td>
-                                </tr>
-
-                                <tr>
-                                    <td><strong>When</strong></td>
-                                    <td>{new Date(run.createdAt).toLocaleString()}</td>
-                                </tr>
-
-                                <tr>
-                                    <td><strong>Artifact</strong></td>
-                                    <td>
-                                        {artifact ? artifact.name : "None produced"}
-                                    </td>
-                                </tr>
-
-                                {artifact && (
-
-                                    <tr>
-                                        <td><strong>Location</strong></td>
-                                        <td>
-                                            {formatBytes(artifact.size)}
-                                            {" — "}
-                                            {artifact.expired ? (
-                                                <span className="empty-state">Expired</span>
-                                            ) : (
-                                                <a
-                                                    href={`${API_BASE}/api/github/artifacts/${artifact.id}/download`}
-                                                    className="token-help-link"
-                                                >
-                                                    Download →
-                                                </a>
-                                            )}
-                                        </td>
-                                    </tr>
-
-                                )}
-
-                            </tbody>
-
-                        </table>
-
+                        <div className="info-row">
+                            <span>Status</span>
+                            <strong>
+                                <StatusBadge status={run.status === "completed" ? run.conclusion : run.status} />
+                            </strong>
                         </div>
+
+                        <div className="info-row">
+                            <span>Triggered by</span>
+                            <strong>{run.triggeredBy || "-"}</strong>
+                        </div>
+
+                        <div className="info-row">
+                            <span>When</span>
+                            <strong>{new Date(run.createdAt).toLocaleString()}</strong>
+                        </div>
+
+                        <div className="info-row">
+                            <span>Artifact</span>
+                            <strong>{artifact ? artifact.name : "None produced"}</strong>
+                        </div>
+
+                        {artifact && (
+
+                            <div className="info-row">
+                                <span>Location</span>
+                                <strong>
+                                    {formatBytes(artifact.size)}
+                                    {" — "}
+                                    {artifact.expired ? (
+                                        <span className="empty-state">Expired</span>
+                                    ) : (
+                                        <a
+                                            href={`${API_BASE}/api/github/artifacts/${artifact.id}/download`}
+                                            className="token-help-link"
+                                        >
+                                            Download →
+                                        </a>
+                                    )}
+                                </strong>
+                            </div>
+
+                        )}
+
+                        </>
 
                     )}
 
