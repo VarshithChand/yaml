@@ -612,6 +612,8 @@ textarea{
 
 .app-sidebar{
 
+    position:relative;
+
     flex-shrink:0;
 
     display:flex;
@@ -635,22 +637,6 @@ textarea{
 .app-sidebar.collapsed{
 
     width:60px;
-
-}
-
-.app-sidebar-head{
-
-    flex-shrink:0;
-
-    display:flex;
-
-    align-items:center;
-
-    justify-content:center;
-
-    padding:12px;
-
-    border-bottom:1px solid var(--border);
 
 }
 
@@ -739,9 +725,18 @@ textarea{
 
 }
 
+/* Floats right on the sidebar's own border, level with the first nav
+   item, instead of taking up a separate header row — "on the line"
+   between the sidebar and the page content. */
 .app-sidebar-toggle{
 
-    flex-shrink:0;
+    position:absolute;
+
+    top:14px;
+
+    right:-13px;
+
+    z-index:10;
 
     width:26px;
 
@@ -753,11 +748,13 @@ textarea{
 
     justify-content:center;
 
-    background:none;
+    background:var(--card-bg);
 
     border:1px solid var(--border);
 
     border-radius:50%;
+
+    box-shadow:0 1px 4px var(--card-shadow);
 
     color:var(--text-muted);
 
@@ -783,7 +780,7 @@ textarea{
 
     gap:2px;
 
-    padding:0 10px 16px;
+    padding:16px 10px 16px;
 
 }
 

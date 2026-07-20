@@ -87,18 +87,19 @@ export function TemplatesIcon() {
     );
 }
 
+// A hex-bolt shape (hexagon outline + center hole) — deliberately not a
+// circle-with-radiating-lines, since that's the Sun icon's own shape and
+// the two were reading as the same icon in the nav.
 export function SettingsIcon() {
     return (
         <svg {...common}>
-            <circle cx="9" cy="9" r="2.6" stroke="currentColor" strokeWidth="1.4" />
-            <line x1="9" y1="1.8" x2="9" y2="3.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-            <line x1="9" y1="14.4" x2="9" y2="16.2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-            <line x1="1.8" y1="9" x2="3.6" y2="9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-            <line x1="14.4" y1="9" x2="16.2" y2="9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-            <line x1="3.55" y1="3.55" x2="4.83" y2="4.83" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-            <line x1="13.17" y1="13.17" x2="14.45" y2="14.45" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-            <line x1="13.17" y1="4.83" x2="14.45" y2="3.55" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-            <line x1="3.55" y1="14.45" x2="4.83" y2="13.17" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            <polygon
+                points="9,2 13.3,4.5 13.3,9.5 9,12 4.7,9.5 4.7,4.5"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+            />
+            <circle cx="9" cy="7" r="2.1" stroke="currentColor" strokeWidth="1.4" />
         </svg>
     );
 }

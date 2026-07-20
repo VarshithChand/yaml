@@ -69,19 +69,15 @@ export default function Sidebar() {
 
         <aside className={`app-sidebar ${collapsed ? "collapsed" : ""}`}>
 
-            <div className="app-sidebar-head">
-
-                <button
-                    type="button"
-                    className="app-sidebar-toggle"
-                    onClick={toggleCollapsed}
-                    aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
-                    title={collapsed ? "Expand navigation" : "Collapse navigation"}
-                >
-                    <ChevronIcon direction={collapsed ? "right" : "left"} />
-                </button>
-
-            </div>
+            <button
+                type="button"
+                className="app-sidebar-toggle"
+                onClick={toggleCollapsed}
+                aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+                title={collapsed ? "Expand navigation" : "Collapse navigation"}
+            >
+                <ChevronIcon direction={collapsed ? "right" : "left"} />
+            </button>
 
             <nav className="app-sidebar-nav">
 
