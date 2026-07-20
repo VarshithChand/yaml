@@ -87,6 +87,36 @@ export function TemplatesIcon() {
     );
 }
 
+export function SunIcon() {
+    return (
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="1.4" />
+            <line x1="8" y1="0.8" x2="8" y2="2.3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            <line x1="8" y1="13.7" x2="8" y2="15.2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            <line x1="0.8" y1="8" x2="2.3" y2="8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            <line x1="13.7" y1="8" x2="15.2" y2="8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            <line x1="2.86" y1="2.86" x2="3.92" y2="3.92" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            <line x1="12.08" y1="12.08" x2="13.14" y2="13.14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            <line x1="12.08" y1="3.92" x2="13.14" y2="2.86" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            <line x1="2.86" y1="13.14" x2="3.92" y2="12.08" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        </svg>
+    );
+}
+
+// Crescent built from two plain circles via a mask (not a hand-authored
+// curve path), so the shape is guaranteed correct rather than guessed.
+export function MoonIcon() {
+    return (
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <mask id="sidebar-moon-mask">
+                <rect width="16" height="16" fill="white" />
+                <circle cx="10.5" cy="5.5" r="4.5" fill="black" />
+            </mask>
+            <circle cx="8" cy="8" r="6" fill="currentColor" mask="url(#sidebar-moon-mask)" />
+        </svg>
+    );
+}
+
 export function ChevronIcon({ direction = "left" }) {
     return (
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"

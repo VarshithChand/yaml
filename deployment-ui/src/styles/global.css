@@ -544,6 +544,16 @@ textarea{
 
 }
 
+.app-sidebar-footer{
+
+    margin-top:auto;
+
+    padding:10px;
+
+    border-top:1px solid var(--border);
+
+}
+
 .app-sidebar-item{
 
     display:flex;

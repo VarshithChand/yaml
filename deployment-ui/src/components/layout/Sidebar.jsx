@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import useNavigation from "../../hooks/useNavigation";
 import useAuth from "../../hooks/useAuth";
+import useTheme from "../../hooks/useTheme";
 
 import {
     DashboardIcon,
@@ -12,7 +13,9 @@ import {
     TimelineIcon,
     HistoryIcon,
     TemplatesIcon,
-    ChevronIcon
+    ChevronIcon,
+    SunIcon,
+    MoonIcon
 } from "./SidebarIcons";
 
 const TABS = [
@@ -36,6 +39,7 @@ export default function Sidebar() {
 
     const { tab, setTab } = useNavigation();
     const { canApproveReleases } = useAuth();
+    const { theme, toggleTheme } = useTheme();
 
     const [collapsed, setCollapsed] = useState(() => {
 
@@ -90,6 +94,24 @@ export default function Sidebar() {
                 ))}
 
             </nav>
+
+            <div className="app-sidebar-footer">
+
+                <button
+                    type="button"
+                    className="app-sidebar-item"
+                    onClick={toggleTheme}
+                    title={collapsed ? (theme === "dark" ? "Light Mode" : "Dark Mode") : undefined}
+                >
+                    <span className="app-sidebar-item-icon">
+                        {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+                    </span>
+                    <span className="app-sidebar-item-label">
+                        {theme === "dark" ? "Light Mode" : "Dark Mode"}
+                    </span>
+                </button>
+
+            </div>
 
         </aside>
 

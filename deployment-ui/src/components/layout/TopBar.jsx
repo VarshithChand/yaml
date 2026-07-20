@@ -1,19 +1,17 @@
 import { useState } from "react";
 
-import useTheme from "../../hooks/useTheme";
 import useAuth from "../../hooks/useAuth";
 import useNavigation from "../../hooks/useNavigation";
 import usePolling from "../../hooks/usePolling";
 import Logo from "../common/Logo";
 import { getRateLimit } from "../../services/githubService";
 
-// The slim top strip: brand mark on the left, account/theme/rate-limit
-// controls on the right. Primary navigation lives in Sidebar now, not
-// here — this bar only ever holds a handful of controls, so it doesn't
-// need its own collapse/hamburger behavior, just normal flex-wrap.
+// The slim top strip: brand mark on the left, account/rate-limit controls
+// on the right. Primary navigation and the theme toggle both live in
+// Sidebar now — this bar only ever holds a handful of controls, so it
+// doesn't need its own collapse/hamburger behavior, just normal flex-wrap.
 export default function TopBar() {
 
-    const { theme, toggleTheme } = useTheme();
     const { user, loading, login, logout, oauthConfigured, tokenOwner } = useAuth();
     const { setTab } = useNavigation();
 
@@ -129,10 +127,6 @@ export default function TopBar() {
                     )
 
                 )}
-
-                <button className="theme-toggle" onClick={toggleTheme}>
-                    {theme === "dark" ? "Light Mode" : "Dark Mode"}
-                </button>
 
             </div>
 
