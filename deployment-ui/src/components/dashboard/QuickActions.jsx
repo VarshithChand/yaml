@@ -39,7 +39,7 @@ export default function QuickActions({
 
                 <button
 
-                    className="btn btn-secondary"
+                    className="btn btn-primary"
                     style={{ marginTop: "10px" }}
                     onClick={() => setSwitchOpen(true)}
 
