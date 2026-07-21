@@ -79,40 +79,44 @@ export default function Sidebar() {
                 <ChevronIcon direction={collapsed ? "right" : "left"} />
             </button>
 
-            <nav className="app-sidebar-nav">
+            <div className="app-sidebar-scroll">
 
-                {visibleTabs.map(({ key, label, Icon }) => (
+                <nav className="app-sidebar-nav">
+
+                    {visibleTabs.map(({ key, label, Icon }) => (
+
+                        <button
+                            key={key}
+                            type="button"
+                            className={`app-sidebar-item ${tab === key ? "active" : ""}`}
+                            onClick={() => setTab(key)}
+                            title={collapsed ? label : undefined}
+                        >
+                            <span className="app-sidebar-item-icon"><Icon /></span>
+                            <span className="app-sidebar-item-label">{label}</span>
+                        </button>
+
+                    ))}
+
+                </nav>
+
+                <div className="app-sidebar-footer">
 
                     <button
-                        key={key}
                         type="button"
-                        className={`app-sidebar-item ${tab === key ? "active" : ""}`}
-                        onClick={() => setTab(key)}
-                        title={collapsed ? label : undefined}
+                        className="app-sidebar-item"
+                        onClick={toggleTheme}
+                        title={collapsed ? (theme === "dark" ? "Light Mode" : "Dark Mode") : undefined}
                     >
-                        <span className="app-sidebar-item-icon"><Icon /></span>
-                        <span className="app-sidebar-item-label">{label}</span>
+                        <span className="app-sidebar-item-icon">
+                            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+                        </span>
+                        <span className="app-sidebar-item-label">
+                            {theme === "dark" ? "Light Mode" : "Dark Mode"}
+                        </span>
                     </button>
 
-                ))}
-
-            </nav>
-
-            <div className="app-sidebar-footer">
-
-                <button
-                    type="button"
-                    className="app-sidebar-item"
-                    onClick={toggleTheme}
-                    title={collapsed ? (theme === "dark" ? "Light Mode" : "Dark Mode") : undefined}
-                >
-                    <span className="app-sidebar-item-icon">
-                        {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-                    </span>
-                    <span className="app-sidebar-item-label">
-                        {theme === "dark" ? "Light Mode" : "Dark Mode"}
-                    </span>
-                </button>
+                </div>
 
             </div>
 
