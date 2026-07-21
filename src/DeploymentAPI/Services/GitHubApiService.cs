@@ -239,6 +239,35 @@ public class GitHubApiService
             }).ToList();
         }, forceRefresh);
 
+    // Creating a branch is really "create a ref pointing at an existing
+    // commit" in GitHub's Git Data API — there's no dedicated "create
+    // branch" endpoint. Needs the source branch's current commit SHA first.
+    public async Task CreateBranchAsync(string newBranchName, string sourceBranch)
+    {
+        var client = _auth.CreateClient();
+
+        var refUrl =
+            $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/git/ref/heads/{Uri.EscapeDataString(sourceBranch)}";
+
+        var refJson = await HttpClientHelper.GetAsync(client, refUrl);
+        var sha = JObject.Parse(refJson)["object"]?["sha"]?.ToString();
+
+        if (string.IsNullOrWhiteSpace(sha))
+            throw new HttpRequestException($"Couldn't resolve a commit to branch from on '{sourceBranch}'.");
+
+        var createUrl =
+            $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/git/refs";
+
+        var body = new { @ref = $"refs/heads/{newBranchName}", sha };
+        var json = System.Text.Json.JsonSerializer.Serialize(body);
+
+        var response = await client.PostAsync(createUrl, new StringContent(json, Encoding.UTF8, "application/json"));
+
+        await HttpClientHelper.EnsureSuccessAsync(response);
+
+        _cache.Remove($"branches:{_auth.Owner}/{_auth.Repository}");
+    }
+
     //===========================================================
     // Collaborators & Access Levels (Settings — Access Control sub-page)
     //===========================================================
@@ -311,6 +340,113 @@ public class GitHubApiService
         await HttpClientHelper.EnsureSuccessAsync(response);
 
         _cache.Remove($"collaborators:{_auth.Owner}/{_auth.Repository}");
+    }
+
+    //===========================================================
+    // Pending Invitations — someone invited via InviteCollaboratorAsync
+    // isn't a real collaborator until they accept; GitHub tracks that as a
+    // separate "invitation" object on a separate endpoint, not part of the
+    // collaborators list at all, until it's accepted.
+    //===========================================================
+
+    public Task<List<AccessEntryDto>> GetPendingInvitationsAsync(bool forceRefresh = false) =>
+        GetCachedAsync($"invitations:{_auth.Owner}/{_auth.Repository}", async () =>
+        {
+            var client = _auth.CreateClient();
+
+            var url =
+                $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/invitations?per_page=100";
+
+            var json = await HttpClientHelper.GetAsync(client, url);
+            var array = JArray.Parse(json);
+
+            return array.Select(x => new AccessEntryDto
+            {
+                Login = x["invitee"]?["login"]?.ToString() ?? string.Empty,
+
+                AvatarUrl = x["invitee"]?["avatar_url"]?.ToString() ?? string.Empty,
+
+                // The invitations endpoint uses the same read/write naming
+                // as role_name above, not the pull/push naming the update
+                // endpoints expect — same normalization applies.
+                Permission = NormalizePermission(x["permissions"]?.ToString()),
+
+                Status = "pending",
+
+                InvitationId = (long?)x["id"]
+            }).ToList();
+        }, forceRefresh);
+
+    // Pending invitations are updated/removed through a completely
+    // different pair of endpoints than actual collaborators (id-keyed, not
+    // username-keyed) — GitHub treats "invited but not yet accepted" as a
+    // different kind of object entirely.
+    public async Task UpdateInvitationAsync(long invitationId, string permission)
+    {
+        var client = _auth.CreateClient();
+
+        var url =
+            $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/invitations/{invitationId}";
+
+        // This endpoint wants "permissions" (plural) with the read/write
+        // naming — the inverse of the normalization GetCollaboratorsAsync
+        // does on the way out, applied here on the way in.
+        var body = new { permissions = DenormalizePermission(permission) };
+        var json = System.Text.Json.JsonSerializer.Serialize(body);
+
+        var request = new HttpRequestMessage(HttpMethod.Patch, url)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        };
+
+        var response = await client.SendAsync(request);
+
+        await HttpClientHelper.EnsureSuccessAsync(response);
+
+        _cache.Remove($"invitations:{_auth.Owner}/{_auth.Repository}");
+    }
+
+    public async Task RemoveInvitationAsync(long invitationId)
+    {
+        var client = _auth.CreateClient();
+
+        var url =
+            $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/invitations/{invitationId}";
+
+        var response = await client.DeleteAsync(url);
+
+        await HttpClientHelper.EnsureSuccessAsync(response);
+
+        _cache.Remove($"invitations:{_auth.Owner}/{_auth.Repository}");
+    }
+
+    private static string DenormalizePermission(string permission) => permission switch
+    {
+        "pull" => "read",
+        "push" => "write",
+        _ => permission
+    };
+
+    // The merged view the Access Levels page actually renders — pending
+    // invitations first, since those are usually what an admin needs to
+    // act on, then everyone who has already accepted.
+    public async Task<List<AccessEntryDto>> GetAccessEntriesAsync(bool forceRefresh = false)
+    {
+        var pending = await GetPendingInvitationsAsync(forceRefresh);
+        var active = await GetCollaboratorsAsync(forceRefresh);
+
+        var entries = new List<AccessEntryDto>(pending);
+
+        entries.AddRange(active.Select(c => new AccessEntryDto
+        {
+            Login = c.Login,
+            AvatarUrl = c.AvatarUrl,
+            Permission = c.Permission,
+            Status = "active",
+            InvitationId = null
+        }));
+
+        return entries;
     }
 
     //===========================================================

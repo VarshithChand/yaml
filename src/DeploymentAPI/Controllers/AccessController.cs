@@ -24,12 +24,24 @@ public class AccessController : ControllerBase
         _log = log;
     }
 
+    // Active collaborators only — used by the Branches page's "restrict who
+    // can push" picker, since a pending invite can't push yet regardless.
     [HttpGet("collaborators")]
     public async Task<IActionResult> Collaborators([FromQuery] bool force = false)
     {
         return Ok(await _github.GetCollaboratorsAsync(force));
     }
 
+    // Active + pending combined — what the Access Levels page renders.
+    [HttpGet("entries")]
+    public async Task<IActionResult> Entries([FromQuery] bool force = false)
+    {
+        return Ok(await _github.GetAccessEntriesAsync(force));
+    }
+
+    // Invite page: creates a brand-new invitation. GitHub emails the
+    // invitee automatically the moment this call succeeds — the portal
+    // doesn't need its own notification step for that.
     [HttpPut("collaborators/{username}")]
     public async Task<IActionResult> InviteCollaborator(string username, InviteCollaboratorUpdateDto request)
     {
@@ -42,7 +54,7 @@ public class AccessController : ControllerBase
 
         _log.LogInfo("Access", $"Invited/updated collaborator '{username}' with '{permission}' access.");
 
-        return Ok(await _github.GetCollaboratorsAsync(forceRefresh: true));
+        return Ok(await _github.GetAccessEntriesAsync(forceRefresh: true));
     }
 
     [HttpDelete("collaborators/{username}")]
@@ -55,7 +67,53 @@ public class AccessController : ControllerBase
 
         _log.LogInfo("Access", $"Removed collaborator '{username}'.");
 
-        return Ok(await _github.GetCollaboratorsAsync(forceRefresh: true));
+        return Ok(await _github.GetAccessEntriesAsync(forceRefresh: true));
+    }
+
+    // Access Levels page: change a still-pending invitation's level.
+    // GitHub also emails the invitee about this automatically.
+    [HttpPut("invitations/{invitationId}")]
+    public async Task<IActionResult> UpdateInvitation(long invitationId, InviteCollaboratorUpdateDto request)
+    {
+        if (await DenyUnlessAdminAsync() is IActionResult denied)
+            return denied;
+
+        var permission = string.IsNullOrWhiteSpace(request.Permission) ? "push" : request.Permission;
+
+        await _github.UpdateInvitationAsync(invitationId, permission);
+
+        _log.LogInfo("Access", $"Updated pending invitation {invitationId} to '{permission}' access.");
+
+        return Ok(await _github.GetAccessEntriesAsync(forceRefresh: true));
+    }
+
+    [HttpDelete("invitations/{invitationId}")]
+    public async Task<IActionResult> RemoveInvitation(long invitationId)
+    {
+        if (await DenyUnlessAdminAsync() is IActionResult denied)
+            return denied;
+
+        await _github.RemoveInvitationAsync(invitationId);
+
+        _log.LogInfo("Access", $"Cancelled pending invitation {invitationId}.");
+
+        return Ok(await _github.GetAccessEntriesAsync(forceRefresh: true));
+    }
+
+    [HttpPost("branches")]
+    public async Task<IActionResult> CreateBranch(CreateBranchDto request)
+    {
+        if (await DenyUnlessAdminAsync() is IActionResult denied)
+            return denied;
+
+        if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.SourceBranch))
+            return BadRequest(new { message = "A branch name and a source branch are both required." });
+
+        await _github.CreateBranchAsync(request.Name.Trim(), request.SourceBranch);
+
+        _log.LogInfo("Access", $"Created branch '{request.Name}' from '{request.SourceBranch}'.");
+
+        return Ok(await _github.GetBranches(forceRefresh: true));
     }
 
     [HttpGet("branches")]

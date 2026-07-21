@@ -1,54 +1,36 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import useToast from "../../hooks/useToast";
-import usePagination from "../../hooks/usePagination";
-import Pagination from "../common/Pagination";
+import SearchBox from "../common/SearchBox";
 
 import {
     getCollaborators,
-    inviteCollaborator,
-    removeCollaborator,
     getBranchAccess,
     saveBranchPurpose,
     setBranchRestriction,
-    removeBranchRestriction
+    removeBranchRestriction,
+    createBranch
 } from "../../services/accessService";
 
-// GitHub's own five collaborator permission levels, least to most access —
-// mapped one-to-one onto the app's five badge colors so the level itself is
-// visually segregated at a glance, not just labeled in text.
-const PERMISSION_LEVELS = [
-    { value: "pull", label: "Read", badge: "badge-success", description: "View and clone only — no changes." },
-    { value: "triage", label: "Triage", badge: "badge-info", description: "Manage issues and pull requests — no code changes." },
-    { value: "push", label: "Write", badge: "badge-secondary", description: "Push commits and open pull requests — GitHub's standard collaborator level." },
-    { value: "maintain", label: "Maintain", badge: "badge-warning", description: "Manage the repository without admin — merge, manage some settings." },
-    { value: "admin", label: "Admin", badge: "badge-danger", description: "Full control, including settings, collaborators, and deleting the repository." }
-];
-
-function levelInfo(permission) {
-    return PERMISSION_LEVELS.find((l) => l.value === permission)
-        || { value: permission, label: permission || "Unknown", badge: "badge-secondary", description: "" };
-}
-
-export default function AccessControl() {
+export default function BranchManager() {
 
     const toast = useToast();
 
     const [collaborators, setCollaborators] = useState([]);
-    const [loadingCollaborators, setLoadingCollaborators] = useState(true);
-
-    const [inviteUsername, setInviteUsername] = useState("");
-    const [invitePermission, setInvitePermission] = useState("push");
-    const [inviting, setInviting] = useState(false);
-    const [removingUser, setRemovingUser] = useState(null);
 
     const [branches, setBranches] = useState([]);
     const [loadingBranches, setLoadingBranches] = useState(true);
+    const [search, setSearch] = useState("");
+
     const [purposeDrafts, setPurposeDrafts] = useState({});
     const [savingPurpose, setSavingPurpose] = useState(null);
     const [restrictionDrafts, setRestrictionDrafts] = useState({});
     const [savingRestriction, setSavingRestriction] = useState(null);
     const [expandedBranch, setExpandedBranch] = useState(null);
+
+    const [newBranchName, setNewBranchName] = useState("");
+    const [sourceBranch, setSourceBranch] = useState("");
+    const [creatingBranch, setCreatingBranch] = useState(false);
 
     async function loadCollaborators() {
 
@@ -61,12 +43,6 @@ export default function AccessControl() {
         catch (err) {
 
             console.error(err);
-            toast.show(err.response?.data?.message || "Unable to load collaborators.", "error");
-
-        }
-        finally {
-
-            setLoadingCollaborators(false);
 
         }
 
@@ -83,6 +59,10 @@ export default function AccessControl() {
             setPurposeDrafts(Object.fromEntries(data.map((b) => [b.name, b.purpose || ""])));
             setRestrictionDrafts(Object.fromEntries(data.map((b) => [b.name, b.allowedUsers || []])));
 
+            if (!sourceBranch && data.length > 0) {
+                setSourceBranch(data[0].name);
+            }
+
         }
         catch (err) {
 
@@ -96,6 +76,8 @@ export default function AccessControl() {
 
         }
 
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+
     }
 
     useEffect(() => {
@@ -106,84 +88,50 @@ export default function AccessControl() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    async function handleInvite() {
+    const filteredBranches = useMemo(() => {
 
-        const username = inviteUsername.trim();
+        const query = search.trim().toLowerCase();
 
-        if (!username) {
-            toast.show("Enter a GitHub username to invite.", "error");
+        if (!query) return branches;
+
+        return branches.filter((b) => b.name.toLowerCase().includes(query));
+
+    }, [branches, search]);
+
+    async function handleCreateBranch() {
+
+        const name = newBranchName.trim();
+
+        if (!name) {
+            toast.show("Enter a name for the new branch.", "error");
+            return;
+        }
+
+        if (!sourceBranch) {
+            toast.show("Pick a branch to create it from.", "error");
             return;
         }
 
         try {
 
-            setInviting(true);
+            setCreatingBranch(true);
 
-            const response = await inviteCollaborator(username, invitePermission);
-            setCollaborators(Array.isArray(response.data) ? response.data : []);
-            setInviteUsername("");
+            await createBranch(name, sourceBranch);
 
-            toast.show(`Invited ${username} as ${levelInfo(invitePermission).label}.`, "success");
+            toast.show(`Branch '${name}' created from '${sourceBranch}'.`, "success");
+            setNewBranchName("");
+            loadBranches();
 
         }
         catch (err) {
 
             console.error(err);
-            toast.show(err.response?.data?.message || `Failed to invite ${username}.`, "error");
+            toast.show(err.response?.data?.message || `Failed to create branch '${name}'.`, "error");
 
         }
         finally {
 
-            setInviting(false);
-
-        }
-
-    }
-
-    async function handleChangePermission(username, permission) {
-
-        try {
-
-            const response = await inviteCollaborator(username, permission);
-            setCollaborators(Array.isArray(response.data) ? response.data : []);
-
-            toast.show(`${username}'s access set to ${levelInfo(permission).label}.`, "success");
-
-        }
-        catch (err) {
-
-            console.error(err);
-            toast.show(err.response?.data?.message || `Failed to update ${username}'s access.`, "error");
-
-        }
-
-    }
-
-    async function handleRemove(username) {
-
-        if (!window.confirm(`Remove ${username} from this repository? They'll lose all access immediately.`)) {
-            return;
-        }
-
-        try {
-
-            setRemovingUser(username);
-
-            const response = await removeCollaborator(username);
-            setCollaborators(Array.isArray(response.data) ? response.data : []);
-
-            toast.show(`Removed ${username}.`, "success");
-
-        }
-        catch (err) {
-
-            console.error(err);
-            toast.show(err.response?.data?.message || `Failed to remove ${username}.`, "error");
-
-        }
-        finally {
-
-            setRemovingUser(null);
+            setCreatingBranch(false);
 
         }
 
@@ -293,16 +241,6 @@ export default function AccessControl() {
 
     }
 
-    const {
-        page: collabPage,
-        setPage: setCollabPage,
-        pageCount: collabPageCount,
-        pageItems: collabPageItems,
-        totalCount: collabTotalCount,
-        startIndex: collabStartIndex,
-        endIndex: collabEndIndex
-    } = usePagination(collaborators, 10);
-
     return (
 
         <>
@@ -310,141 +248,42 @@ export default function AccessControl() {
         <div className="card">
 
             <h2 className="card-title">
-                Collaborators &amp; Access Levels
+                Create a Branch
             </h2>
 
             <p className="empty-state" style={{ padding: "0 0 15px", textAlign: "left" }}>
-                Invite a GitHub user to this repository, or change/remove an existing collaborator's
-                access. Levels come straight from GitHub, least to most access:
+                Branches off an existing branch's latest commit, the same as GitHub's own
+                "create branch from" action.
             </p>
 
-            <div className="access-level-legend">
+            <div className="access-invite-controls">
 
-                {PERMISSION_LEVELS.map((level) => (
-
-                    <div key={level.value} className="access-level-legend-item">
-                        <span className={`badge ${level.badge}`}>{level.label}</span>
-                        <span>{level.description}</span>
-                    </div>
-
-                ))}
-
-            </div>
-
-            <div className="form-group">
-
-                <label>Invite a collaborator</label>
-
-                <div className="access-invite-controls">
-
-                    <input
-                        type="text"
-                        className="form-control"
-                        placeholder="GitHub username"
-                        value={inviteUsername}
-                        onChange={(e) => setInviteUsername(e.target.value)}
-                        autoComplete="off"
-                    />
-
-                    <select
-                        className="form-control access-permission-select"
-                        value={invitePermission}
-                        onChange={(e) => setInvitePermission(e.target.value)}
-                    >
-                        {PERMISSION_LEVELS.map((level) => (
-                            <option key={level.value} value={level.value}>{level.label}</option>
-                        ))}
-                    </select>
-
-                    <button className="btn btn-primary" onClick={handleInvite} disabled={inviting}>
-                        {inviting ? "Inviting..." : "Invite"}
-                    </button>
-
-                </div>
-
-            </div>
-
-            {loadingCollaborators ? (
-
-                <p className="field-hint">Loading collaborators...</p>
-
-            ) : collaborators.length === 0 ? (
-
-                <p className="empty-state">No direct collaborators on this repository yet.</p>
-
-            ) : (
-
-                <>
-
-                <div className="table-scroll">
-
-                <table className="table">
-
-                    <thead>
-                        <tr>
-                            <th>User</th>
-                            <th>Access Level</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-
-                    <tbody>
-
-                        {collabPageItems.map((c) => (
-
-                            <tr key={c.login}>
-
-                                <td>
-                                    <div className="access-user-cell">
-                                        {c.avatarUrl && <img src={c.avatarUrl} alt="" className="access-user-avatar" />}
-                                        <span>{c.login}</span>
-                                    </div>
-                                </td>
-
-                                <td>
-                                    <select
-                                        className="form-control access-permission-select"
-                                        value={c.permission}
-                                        onChange={(e) => handleChangePermission(c.login, e.target.value)}
-                                    >
-                                        {PERMISSION_LEVELS.map((level) => (
-                                            <option key={level.value} value={level.value}>{level.label}</option>
-                                        ))}
-                                    </select>
-                                </td>
-
-                                <td>
-                                    <button
-                                        className="btn btn-danger btn-sm"
-                                        onClick={() => handleRemove(c.login)}
-                                        disabled={removingUser === c.login}
-                                    >
-                                        {removingUser === c.login ? "Removing..." : "Remove"}
-                                    </button>
-                                </td>
-
-                            </tr>
-
-                        ))}
-
-                    </tbody>
-
-                </table>
-
-                </div>
-
-                <Pagination
-                    page={collabPage}
-                    pageCount={collabPageCount}
-                    totalCount={collabTotalCount}
-                    startIndex={collabStartIndex}
-                    endIndex={collabEndIndex}
-                    onPageChange={setCollabPage}
+                <input
+                    type="text"
+                    className="form-control"
+                    placeholder="New branch name"
+                    value={newBranchName}
+                    onChange={(e) => setNewBranchName(e.target.value)}
+                    autoComplete="off"
                 />
 
-                </>
+                <span className="access-branch-from-label">from</span>
 
-            )}
+                <select
+                    className="form-control access-permission-select"
+                    value={sourceBranch}
+                    onChange={(e) => setSourceBranch(e.target.value)}
+                >
+                    {branches.map((b) => (
+                        <option key={b.name} value={b.name}>{b.name}</option>
+                    ))}
+                </select>
+
+                <button className="btn btn-primary" onClick={handleCreateBranch} disabled={creatingBranch}>
+                    {creatingBranch ? "Creating..." : "Create Branch"}
+                </button>
+
+            </div>
 
         </div>
 
@@ -460,6 +299,12 @@ export default function AccessControl() {
                 it rejects the request, and the error will say so.
             </p>
 
+            <SearchBox
+                placeholder="Search branches..."
+                value={search}
+                onChange={setSearch}
+            />
+
             {loadingBranches ? (
 
                 <p className="field-hint">Loading branches...</p>
@@ -468,11 +313,15 @@ export default function AccessControl() {
 
                 <p className="empty-state">No branches found.</p>
 
+            ) : filteredBranches.length === 0 ? (
+
+                <p className="empty-state">No matches for "{search}".</p>
+
             ) : (
 
                 <div className="access-branch-list">
 
-                    {branches.map((b) => (
+                    {filteredBranches.map((b) => (
 
                         <div className="access-branch-item" key={b.name}>
 
@@ -532,12 +381,12 @@ export default function AccessControl() {
 
                                     <div className="form-group">
 
-                                        <label>Restrict who can push</label>
+                                        <label>Assign users — restrict who can push</label>
 
                                         {collaborators.length === 0 ? (
 
                                             <p className="field-hint">
-                                                Invite at least one collaborator above before restricting push access.
+                                                Invite at least one collaborator before restricting push access.
                                             </p>
 
                                         ) : (
