@@ -174,6 +174,23 @@ app.Use(async (context, next) =>
 });
 
 //
+// Security headers — this API only ever returns JSON (the frontend is a
+// separate SPA), but Swagger's own UI below is HTML, and these are cheap,
+// standard defense-in-depth regardless of response type: stop a browser
+// from MIME-sniffing a JSON response into something executable, stop this
+// app from being framed by another site (clickjacking), and don't leak
+// the full request URL to third-party origins via the Referer header.
+//
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["X-Frame-Options"] = "DENY";
+    context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+
+    await next();
+});
+
+//
 // Swagger
 //
 if (app.Environment.IsDevelopment())
@@ -184,8 +201,16 @@ if (app.Environment.IsDevelopment())
 
 //
 // HTTPS
+// UseHsts is skipped in Development — the header is cached by the browser
+// for a year by default, which is a well-known footgun if this host is
+// ever later served locally over plain HTTP again.
 //
 app.UseHttpsRedirection();
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
 
 //
 // CORS

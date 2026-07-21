@@ -1,3 +1,4 @@
+using DeploymentAPI.Helpers;
 using DeploymentAPI.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -53,7 +54,7 @@ public class PullRequestsController : ControllerBase
     [HttpPost("{number}/approve")]
     public async Task<IActionResult> Approve(int number)
     {
-        if (await DenyUnlessAdminAsync() is IActionResult denied)
+        if (await AdminGate.DenyUnlessAdminAsync(this, _settings, "approve or merge pull requests") is IActionResult denied)
             return denied;
 
         await _github.ApprovePullRequestAsync(number);
@@ -66,7 +67,7 @@ public class PullRequestsController : ControllerBase
     [HttpPost("{number}/merge")]
     public async Task<IActionResult> Merge(int number)
     {
-        if (await DenyUnlessAdminAsync() is IActionResult denied)
+        if (await AdminGate.DenyUnlessAdminAsync(this, _settings, "approve or merge pull requests") is IActionResult denied)
             return denied;
 
         await _github.MergePullRequestAsync(number);
@@ -74,20 +75,5 @@ public class PullRequestsController : ControllerBase
         _log.LogInfo("Pull Requests", $"Merged PR #{number}.");
 
         return Ok(await _github.GetOpenPullRequestsAsync(forceRefresh: true));
-    }
-
-    // Copied from SettingsController.DenyUnlessAdminAsync — see
-    // AccessController for why this is duplicated rather than shared.
-    private async Task<IActionResult?> DenyUnlessAdminAsync()
-    {
-        var view = await _settings.GetViewAsync();
-
-        if (view.AdminGitHubUsernames.Count == 0)
-            return null;
-
-        if (User.Identity?.IsAuthenticated == true && User.IsInRole("Admin"))
-            return null;
-
-        return StatusCode(403, new { message = "Admin login required to approve or merge pull requests." });
     }
 }

@@ -141,7 +141,7 @@ public class DeploymentService
     {
         var url =
             $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/actions/workflows/{workflow}/runs" +
-            $"?branch={branch}&event=workflow_dispatch&per_page=5";
+            $"?branch={Uri.EscapeDataString(branch)}&event=workflow_dispatch&per_page=5";
 
         for (var attempt = 0; attempt < 5; attempt++)
         {

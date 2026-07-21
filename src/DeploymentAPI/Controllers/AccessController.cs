@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using DeploymentAPI.DTOs;
+using DeploymentAPI.Helpers;
 using DeploymentAPI.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -57,7 +58,7 @@ public class AccessController : ControllerBase
     [HttpPut("collaborators/{username}")]
     public async Task<IActionResult> InviteCollaborator(string username, InviteCollaboratorUpdateDto request)
     {
-        if (await DenyUnlessAdminAsync() is IActionResult denied)
+        if (await AdminGate.DenyUnlessAdminAsync(this, _settings, "change repository access") is IActionResult denied)
             return denied;
 
         var permission = string.IsNullOrWhiteSpace(request.Permission) ? "push" : request.Permission;
@@ -72,7 +73,7 @@ public class AccessController : ControllerBase
     [HttpDelete("collaborators/{username}")]
     public async Task<IActionResult> RemoveCollaborator(string username)
     {
-        if (await DenyUnlessAdminAsync() is IActionResult denied)
+        if (await AdminGate.DenyUnlessAdminAsync(this, _settings, "change repository access") is IActionResult denied)
             return denied;
 
         await _github.RemoveCollaboratorAsync(username);
@@ -89,7 +90,7 @@ public class AccessController : ControllerBase
     [HttpPut("collaborators/{username}/assign-repo")]
     public async Task<IActionResult> AssignToRepo(string username, AssignRepoDto request)
     {
-        if (await DenyUnlessAdminAsync() is IActionResult denied)
+        if (await AdminGate.DenyUnlessAdminAsync(this, _settings, "change repository access") is IActionResult denied)
             return denied;
 
         if (string.IsNullOrWhiteSpace(request.Owner) || string.IsNullOrWhiteSpace(request.Repository))
@@ -109,7 +110,7 @@ public class AccessController : ControllerBase
     [HttpPut("invitations/{invitationId}")]
     public async Task<IActionResult> UpdateInvitation(long invitationId, InviteCollaboratorUpdateDto request)
     {
-        if (await DenyUnlessAdminAsync() is IActionResult denied)
+        if (await AdminGate.DenyUnlessAdminAsync(this, _settings, "change repository access") is IActionResult denied)
             return denied;
 
         var permission = string.IsNullOrWhiteSpace(request.Permission) ? "push" : request.Permission;
@@ -124,7 +125,7 @@ public class AccessController : ControllerBase
     [HttpDelete("invitations/{invitationId}")]
     public async Task<IActionResult> RemoveInvitation(long invitationId)
     {
-        if (await DenyUnlessAdminAsync() is IActionResult denied)
+        if (await AdminGate.DenyUnlessAdminAsync(this, _settings, "change repository access") is IActionResult denied)
             return denied;
 
         await _github.RemoveInvitationAsync(invitationId);
@@ -137,7 +138,7 @@ public class AccessController : ControllerBase
     [HttpPost("branches")]
     public async Task<IActionResult> CreateBranch(CreateBranchDto request)
     {
-        if (await DenyUnlessAdminAsync() is IActionResult denied)
+        if (await AdminGate.DenyUnlessAdminAsync(this, _settings, "change repository access") is IActionResult denied)
             return denied;
 
         if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.SourceBranch))
@@ -165,7 +166,7 @@ public class AccessController : ControllerBase
             && !string.IsNullOrEmpty(creator)
             && string.Equals(creator, CurrentLogin(), StringComparison.OrdinalIgnoreCase);
 
-        if (!isCreator && await DenyUnlessAdminAsync() is IActionResult denied)
+        if (!isCreator && await AdminGate.DenyUnlessAdminAsync(this, _settings, "change repository access") is IActionResult denied)
             return denied;
 
         await _github.DeleteBranchAsync(branch);
@@ -206,7 +207,7 @@ public class AccessController : ControllerBase
     [HttpPut("branches/{branch}/purpose")]
     public async Task<IActionResult> SaveBranchPurpose(string branch, BranchPurposeUpdateDto request)
     {
-        if (await DenyUnlessAdminAsync() is IActionResult denied)
+        if (await AdminGate.DenyUnlessAdminAsync(this, _settings, "change repository access") is IActionResult denied)
             return denied;
 
         await _settings.SaveBranchPurposeAsync(branch, request.Purpose ?? string.Empty);
@@ -217,7 +218,7 @@ public class AccessController : ControllerBase
     [HttpPut("branches/{branch}/restrictions")]
     public async Task<IActionResult> SetBranchRestriction(string branch, BranchRestrictionUpdateDto request)
     {
-        if (await DenyUnlessAdminAsync() is IActionResult denied)
+        if (await AdminGate.DenyUnlessAdminAsync(this, _settings, "change repository access") is IActionResult denied)
             return denied;
 
         if (request.Usernames == null || request.Usernames.Count == 0)
@@ -233,7 +234,7 @@ public class AccessController : ControllerBase
     [HttpDelete("branches/{branch}/restrictions")]
     public async Task<IActionResult> RemoveBranchRestriction(string branch)
     {
-        if (await DenyUnlessAdminAsync() is IActionResult denied)
+        if (await AdminGate.DenyUnlessAdminAsync(this, _settings, "change repository access") is IActionResult denied)
             return denied;
 
         await _github.RemoveBranchRestrictionAsync(branch);
@@ -241,23 +242,6 @@ public class AccessController : ControllerBase
         _log.LogInfo("Access", $"Removed push restriction on '{branch}'.");
 
         return Ok();
-    }
-
-    // Copied from SettingsController.DenyUnlessAdminAsync — the codebase
-    // has no shared base controller/filter for admin-gating yet, so this
-    // mirrors that method exactly rather than introducing a new shared
-    // abstraction as a side effect of this feature.
-    private async Task<IActionResult?> DenyUnlessAdminAsync()
-    {
-        var view = await _settings.GetViewAsync();
-
-        if (view.AdminGitHubUsernames.Count == 0)
-            return null;
-
-        if (User.Identity?.IsAuthenticated == true && User.IsInRole("Admin"))
-            return null;
-
-        return StatusCode(403, new { message = "Admin login required to change repository access." });
     }
 
     // The only claim AuthService ever issues for the GitHub username is

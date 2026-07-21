@@ -1,4 +1,5 @@
 using DeploymentAPI.DTOs;
+using DeploymentAPI.Helpers;
 using DeploymentAPI.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,10 +10,12 @@ namespace DeploymentAPI.Controllers;
 public class ApprovalsController : ControllerBase
 {
     private readonly GitHubApiService _service;
+    private readonly SettingsService _settings;
 
-    public ApprovalsController(GitHubApiService service)
+    public ApprovalsController(GitHubApiService service, SettingsService settings)
     {
         _service = service;
+        _settings = settings;
     }
 
     [HttpGet("pending")]
@@ -21,9 +24,17 @@ public class ApprovalsController : ControllerBase
         return Ok(await _service.GetPendingApprovalsAsync());
     }
 
+    // Approving/rejecting a protected-environment deployment had no
+    // server-side check at all before this — the Approvals nav tab/button
+    // being hidden client-side for non-admins is a UX nicety, not access
+    // control; anyone who called this endpoint directly could approve or
+    // reject regardless of what the UI showed them.
     [HttpPost("decide")]
     public async Task<IActionResult> Decide(ApprovalDecisionDto decision)
     {
+        if (await AdminGate.DenyUnlessAdminAsync(this, _settings, "approve or reject a release") is IActionResult denied)
+            return denied;
+
         if (decision.RunId <= 0 || decision.EnvironmentIds.Count == 0)
             return BadRequest("runId and at least one environmentId are required.");
 

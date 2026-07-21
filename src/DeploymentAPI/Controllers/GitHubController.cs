@@ -1,3 +1,4 @@
+using DeploymentAPI.Helpers;
 using DeploymentAPI.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,10 +9,12 @@ namespace DeploymentAPI.Controllers;
 public class GitHubController : ControllerBase
 {
     private readonly GitHubApiService _service;
+    private readonly SettingsService _settings;
 
-    public GitHubController(GitHubApiService service)
+    public GitHubController(GitHubApiService service, SettingsService settings)
     {
         _service = service;
+        _settings = settings;
     }
 
     [HttpGet("repository")]
@@ -66,9 +69,14 @@ public class GitHubController : ControllerBase
         return File(content, "application/zip", fileName);
     }
 
+    // Permanently deleting a build artifact had no server-side check at
+    // all before this — same class of gap as Deploy and Approvals.Decide.
     [HttpDelete("artifacts/{id}")]
     public async Task<IActionResult> DeleteArtifact(long id)
     {
+        if (await AdminGate.DenyUnlessAdminAsync(this, _settings, "delete an artifact") is IActionResult denied)
+            return denied;
+
         await _service.DeleteArtifactAsync(id);
         return NoContent();
     }

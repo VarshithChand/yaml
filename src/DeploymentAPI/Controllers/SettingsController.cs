@@ -1,4 +1,5 @@
 using DeploymentAPI.DTOs;
+using DeploymentAPI.Helpers;
 using DeploymentAPI.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -20,7 +21,20 @@ public class SettingsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Get()
     {
-        return Ok(await _settings.GetViewAsync());
+        var view = await _settings.GetViewAsync();
+
+        // The admin allowlist is only needed by an admin editing it, or
+        // during bootstrap when it's empty anyway — showing the real
+        // usernames to an anonymous/non-admin visitor once configured is
+        // pure reconnaissance value (exactly who to target to gain admin
+        // access here) for no functional benefit, since they can't act on
+        // it either way.
+        if (!AdminGate.IsAdminOrBootstrap(this, view))
+        {
+            view.AdminGitHubUsernames = new List<string>();
+        }
+
+        return Ok(view);
     }
 
     [HttpGet("github/preview")]
@@ -32,10 +46,18 @@ public class SettingsController : ControllerBase
         return Ok(await _github.PreviewRepositoryAsync(owner, repository));
     }
 
+    // Changing credentials or the admin allowlist is restricted to admins —
+    // without this, any anonymous visitor could overwrite the GitHub PAT,
+    // point the OAuth app at their own client, or add their own GitHub
+    // username to the admin list. The one exception is a fresh, unconfigured
+    // instance (no admin designated yet): the first person to visit Settings
+    // has to be able to configure it without a login that, before any admin
+    // exists, nobody could have obtained. See AdminGate for the shared rule.
+
     [HttpPost("github")]
     public async Task<IActionResult> SaveGitHub(GitHubSettingsUpdateDto request)
     {
-        if (await DenyUnlessAdminAsync() is IActionResult denied)
+        if (await AdminGate.DenyUnlessAdminAsync(this, _settings, "change settings") is IActionResult denied)
             return denied;
 
         return Ok(await _settings.SaveGitHubAsync(request));
@@ -44,7 +66,7 @@ public class SettingsController : ControllerBase
     [HttpPost("docker")]
     public async Task<IActionResult> SaveDocker(DockerSettingsUpdateDto request)
     {
-        if (await DenyUnlessAdminAsync() is IActionResult denied)
+        if (await AdminGate.DenyUnlessAdminAsync(this, _settings, "change settings") is IActionResult denied)
             return denied;
 
         return Ok(await _settings.SaveDockerAsync(request));
@@ -53,7 +75,7 @@ public class SettingsController : ControllerBase
     [HttpPost("github-oauth")]
     public async Task<IActionResult> SaveGitHubOAuth(GitHubOAuthUpdateDto request)
     {
-        if (await DenyUnlessAdminAsync() is IActionResult denied)
+        if (await AdminGate.DenyUnlessAdminAsync(this, _settings, "change settings") is IActionResult denied)
             return denied;
 
         return Ok(await _settings.SaveGitHubOAuthAsync(request));
@@ -62,7 +84,7 @@ public class SettingsController : ControllerBase
     [HttpPost("admins")]
     public async Task<IActionResult> SaveAdmins(AdminUsernamesUpdateDto request)
     {
-        if (await DenyUnlessAdminAsync() is IActionResult denied)
+        if (await AdminGate.DenyUnlessAdminAsync(this, _settings, "change settings") is IActionResult denied)
             return denied;
 
         return Ok(await _settings.SaveAdminUsernamesAsync(request));
@@ -71,7 +93,7 @@ public class SettingsController : ControllerBase
     [HttpDelete("{section}")]
     public async Task<IActionResult> Clear(string section)
     {
-        if (await DenyUnlessAdminAsync() is IActionResult denied)
+        if (await AdminGate.DenyUnlessAdminAsync(this, _settings, "change settings") is IActionResult denied)
             return denied;
 
         try
@@ -82,25 +104,5 @@ public class SettingsController : ControllerBase
         {
             return BadRequest(ex.Message);
         }
-    }
-
-    // Changing credentials or the admin allowlist is restricted to admins —
-    // without this, any anonymous visitor could overwrite the GitHub PAT,
-    // point the OAuth app at their own client, or add their own GitHub
-    // username to the admin list. The one exception is a fresh, unconfigured
-    // instance (no admin designated yet): the first person to visit Settings
-    // has to be able to configure it without a login that, before any admin
-    // exists, nobody could have obtained.
-    private async Task<IActionResult?> DenyUnlessAdminAsync()
-    {
-        var view = await _settings.GetViewAsync();
-
-        if (view.AdminGitHubUsernames.Count == 0)
-            return null;
-
-        if (User.Identity?.IsAuthenticated == true && User.IsInRole("Admin"))
-            return null;
-
-        return StatusCode(403, new { message = "Admin login required to change settings." });
     }
 }
