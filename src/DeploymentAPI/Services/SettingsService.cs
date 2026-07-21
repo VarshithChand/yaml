@@ -173,6 +173,38 @@ public class SettingsService
         return BuildView(root);
     }
 
+    // Branch "purpose" is a portal-only note (GitHub has no such field) —
+    // stored in its own top-level section rather than folded into
+    // SettingsViewDto, since it's per-branch data, not a single credential.
+    public async Task<Dictionary<string, string>> GetBranchPurposesAsync()
+    {
+        var root = await ReadRootAsync();
+        var purposes = root["BranchPurposes"] as JObject;
+
+        return purposes?.Properties()
+            .ToDictionary(p => p.Name, p => p.Value?.ToString() ?? string.Empty)
+            ?? new Dictionary<string, string>();
+    }
+
+    public async Task SaveBranchPurposeAsync(string branch, string purpose)
+    {
+        var root = await ReadRootAsync();
+        var purposes = root["BranchPurposes"] as JObject ?? new JObject();
+
+        if (string.IsNullOrWhiteSpace(purpose))
+            purposes.Remove(branch);
+        else
+            purposes[branch] = purpose;
+
+        root["BranchPurposes"] = purposes;
+
+        await WriteRootAsync(root);
+
+        _log.LogInfo("Settings", string.IsNullOrWhiteSpace(purpose)
+            ? $"Branch purpose cleared for '{branch}'."
+            : $"Branch purpose saved for '{branch}': {purpose}");
+    }
+
     private static SettingsViewDto BuildView(JObject root)
     {
         var github = root["GitHub"] as JObject;

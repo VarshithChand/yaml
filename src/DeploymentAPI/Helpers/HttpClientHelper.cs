@@ -103,7 +103,32 @@ namespace DeploymentAPI.Helpers
         {
             try
             {
-                return JObject.Parse(body)["message"]?.ToString();
+                var json = JObject.Parse(body);
+
+                var message = json["message"]?.ToString();
+
+                // On a 422, GitHub's top-level "message" is often just the
+                // generic "Validation Failed" — the actual reason lives in
+                // errors[].message (e.g. why a request like a branch push
+                // restriction was rejected). Appended when present instead
+                // of replacing the top-level message, since some responses
+                // only have one or the other.
+                // Each element can be either an object ({"message": "..."})
+                // or a plain string, depending on the endpoint — (e as
+                // JObject) is null (not a throw) for the plain-string case,
+                // so it falls through to e.ToString().
+                var detail = (json["errors"] as JArray)?
+                    .Select(e => (e as JObject)?["message"]?.ToString() ?? e.ToString())
+                    .Where(m => !string.IsNullOrWhiteSpace(m))
+                    .ToList();
+
+                if (detail != null && detail.Count > 0)
+                {
+                    var joined = string.Join(" ", detail);
+                    return string.IsNullOrWhiteSpace(message) ? joined : $"{message}: {joined}";
+                }
+
+                return message;
             }
             catch
             {

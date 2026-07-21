@@ -14,6 +14,7 @@ import { getLogs } from "../services/logsService";
 
 import LoadingSpinner from "../components/LoadingSpinner";
 import PageLayout from "../components/layout/PageLayout";
+import AccessControl from "../components/settings/AccessControl";
 import ComboBox from "../components/common/ComboBox";
 import ClearableInput from "../components/common/ClearableInput";
 import Pagination from "../components/common/Pagination";
@@ -461,7 +462,11 @@ export default function Settings() {
         return <LoadingSpinner />;
     }
 
-    const pageTitle = view === "credentials" ? "Credentials" : view === "activity-log" ? "Activity Log" : "Settings";
+    const pageTitle =
+        view === "credentials" ? "Credentials"
+        : view === "activity-log" ? "Activity Log"
+        : view === "access" ? "Access Control"
+        : "Settings";
 
     return (
 
@@ -486,6 +491,14 @@ export default function Settings() {
                         <p>
                             Recent settings changes and backend errors, kept in memory on
                             the server.
+                        </p>
+                    </button>
+
+                    <button type="button" className="settings-hub-tile" onClick={() => setView("access")}>
+                        <h2>Access Control</h2>
+                        <p>
+                            Invite or remove repository collaborators, set their access level,
+                            and manage per-branch push restrictions and purpose notes.
                         </p>
                     </button>
 
@@ -930,6 +943,20 @@ export default function Settings() {
                 )}
 
             </div>
+
+            </>
+
+            )}
+
+            {view === "access" && (
+
+            <>
+
+            <button type="button" className="settings-back-link" onClick={() => setView("hub")}>
+                ← Back to Settings
+            </button>
+
+            <AccessControl />
 
             </>
 

@@ -240,6 +240,162 @@ public class GitHubApiService
         }, forceRefresh);
 
     //===========================================================
+    // Collaborators & Access Levels (Settings — Access Control sub-page)
+    //===========================================================
+
+    public Task<List<CollaboratorDto>> GetCollaboratorsAsync(bool forceRefresh = false) =>
+        GetCachedAsync($"collaborators:{_auth.Owner}/{_auth.Repository}", async () =>
+        {
+            var client = _auth.CreateClient();
+
+            var url =
+                $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/collaborators?per_page=100&affiliation=direct";
+
+            var json = await HttpClientHelper.GetAsync(client, url);
+            var array = JArray.Parse(json);
+
+            return array.Select(x => new CollaboratorDto
+            {
+                Login = x["login"]?.ToString() ?? string.Empty,
+
+                AvatarUrl = x["avatar_url"]?.ToString() ?? string.Empty,
+
+                // role_name is GitHub's own five-level label, but it uses
+                // "read"/"write" while the endpoint that *sets* a level
+                // (PUT collaborators/{username}) expects "pull"/"push" for
+                // those same two levels — an inconsistency in GitHub's own
+                // API. Normalized here so the DTO always speaks the
+                // pull/triage/push/maintain/admin scale end-to-end, and a
+                // dropdown pre-selecting someone's current level actually
+                // matches one of its own options.
+                Permission = NormalizePermission(x["role_name"]?.ToString())
+            }).ToList();
+        }, forceRefresh);
+
+    private static string NormalizePermission(string? roleName) => roleName switch
+    {
+        "read" => "pull",
+        "write" => "push",
+        _ => roleName ?? string.Empty
+    };
+
+    // PUT .../collaborators/{username} both invites a new user AND updates
+    // an existing collaborator's permission level — GitHub uses the same
+    // endpoint for both, so there's no separate "change access level" call.
+    public async Task InviteCollaboratorAsync(string username, string permission)
+    {
+        var client = _auth.CreateClient();
+
+        var url =
+            $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/collaborators/{Uri.EscapeDataString(username)}";
+
+        var body = new { permission };
+        var json = System.Text.Json.JsonSerializer.Serialize(body);
+
+        var response = await client.PutAsync(url, new StringContent(json, Encoding.UTF8, "application/json"));
+
+        await HttpClientHelper.EnsureSuccessAsync(response);
+
+        _cache.Remove($"collaborators:{_auth.Owner}/{_auth.Repository}");
+    }
+
+    public async Task RemoveCollaboratorAsync(string username)
+    {
+        var client = _auth.CreateClient();
+
+        var url =
+            $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/collaborators/{Uri.EscapeDataString(username)}";
+
+        var response = await client.DeleteAsync(url);
+
+        await HttpClientHelper.EnsureSuccessAsync(response);
+
+        _cache.Remove($"collaborators:{_auth.Owner}/{_auth.Repository}");
+    }
+
+    //===========================================================
+    // Branch Push Restrictions ("give the branch access" — who is allowed
+    // to push to a given branch). GitHub only honors push restrictions on
+    // organization-owned repositories with branch protection enabled; on a
+    // personal-account repo it rejects the request, and HttpClientHelper's
+    // 422/403 handling already turns that into a readable message instead
+    // of a raw status code, so it's surfaced honestly rather than faked.
+    //===========================================================
+
+    public Task<(bool Restricted, List<string> AllowedUsers)> GetBranchRestrictionAsync(string branch, bool forceRefresh = false) =>
+        GetCachedAsync($"branch-restriction:{_auth.Owner}/{_auth.Repository}/{branch}", async () =>
+        {
+            var client = _auth.CreateClient();
+
+            var url =
+                $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/branches/{Uri.EscapeDataString(branch)}/protection";
+
+            var response = await client.GetAsync(url);
+
+            // Unprotected branches 404 here — that's a normal, common state,
+            // not a failure, so it's mapped to "not restricted" rather than
+            // thrown as an error.
+            if (response.StatusCode == HttpStatusCode.NotFound)
+                return (Restricted: false, AllowedUsers: new List<string>());
+
+            await HttpClientHelper.EnsureSuccessAsync(response);
+
+            var json = JObject.Parse(await response.Content.ReadAsStringAsync());
+
+            var users = (json["restrictions"]?["users"] as JArray)?
+                .Select(u => u["login"]?.ToString() ?? "")
+                .Where(login => !string.IsNullOrWhiteSpace(login))
+                .ToList() ?? new List<string>();
+
+            return (Restricted: users.Count > 0, AllowedUsers: users);
+        }, forceRefresh);
+
+    public async Task SetBranchRestrictionAsync(string branch, List<string> usernames)
+    {
+        var client = _auth.CreateClient();
+
+        var url =
+            $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/branches/{Uri.EscapeDataString(branch)}/protection";
+
+        // GitHub's "Update branch protection" endpoint requires all four
+        // top-level fields in one request even when only restrictions is
+        // being set — the other three are explicitly turned off (null)
+        // rather than left configuring status checks/reviews this page
+        // was never asked to manage.
+        var body = new
+        {
+            required_status_checks = (object?)null,
+            enforce_admins = false,
+            required_pull_request_reviews = (object?)null,
+            restrictions = new { users = usernames, teams = Array.Empty<string>(), apps = Array.Empty<string>() }
+        };
+
+        var json = System.Text.Json.JsonSerializer.Serialize(body);
+
+        var response = await client.PutAsync(url, new StringContent(json, Encoding.UTF8, "application/json"));
+
+        await HttpClientHelper.EnsureSuccessAsync(response);
+
+        _cache.Remove($"branch-restriction:{_auth.Owner}/{_auth.Repository}/{branch}");
+    }
+
+    public async Task RemoveBranchRestrictionAsync(string branch)
+    {
+        var client = _auth.CreateClient();
+
+        var url =
+            $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/branches/{Uri.EscapeDataString(branch)}/protection/restrictions";
+
+        var response = await client.DeleteAsync(url);
+
+        // Already unprotected/unrestricted — nothing to remove, not a failure.
+        if (response.StatusCode != HttpStatusCode.NotFound)
+            await HttpClientHelper.EnsureSuccessAsync(response);
+
+        _cache.Remove($"branch-restriction:{_auth.Owner}/{_auth.Repository}/{branch}");
+    }
+
+    //===========================================================
     // Artifacts
     //===========================================================
 
