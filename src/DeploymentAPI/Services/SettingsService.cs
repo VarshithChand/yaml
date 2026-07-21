@@ -205,6 +205,40 @@ public class SettingsService
             : $"Branch purpose saved for '{branch}': {purpose}");
     }
 
+    // Who created a branch through the portal — GitHub's API has no
+    // "branch creator" concept of its own, so this is tracked locally the
+    // same way branch purposes are. Drives "the creator or an admin can
+    // delete this branch"; a branch with no recorded creator (made outside
+    // the portal, or before this existed) can only be deleted by an admin.
+    public async Task<Dictionary<string, string>> GetBranchCreatorsAsync()
+    {
+        var root = await ReadRootAsync();
+        var creators = root["BranchCreators"] as JObject;
+
+        return creators?.Properties()
+            .ToDictionary(p => p.Name, p => p.Value?.ToString() ?? string.Empty)
+            ?? new Dictionary<string, string>();
+    }
+
+    public async Task SaveBranchCreatorAsync(string branch, string login)
+    {
+        var root = await ReadRootAsync();
+        var creators = root["BranchCreators"] as JObject ?? new JObject();
+
+        creators[branch] = login;
+        root["BranchCreators"] = creators;
+
+        await WriteRootAsync(root);
+    }
+
+    public async Task RemoveBranchCreatorAsync(string branch)
+    {
+        var root = await ReadRootAsync();
+
+        if (root["BranchCreators"] is JObject creators && creators.Remove(branch))
+            await WriteRootAsync(root);
+    }
+
     private static SettingsViewDto BuildView(JObject root)
     {
         var github = root["GitHub"] as JObject;

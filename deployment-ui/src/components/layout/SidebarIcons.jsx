@@ -39,6 +39,21 @@ export function ApprovalsIcon() {
     );
 }
 
+// Simplified git-merge glyph: two connected nodes on the left (the PR's
+// source branch) with a right-angle line merging into a third node (the
+// base branch) — built from circles/line/polyline only, no curves.
+export function PullRequestIcon() {
+    return (
+        <svg {...common}>
+            <circle cx="5" cy="4.5" r="2" stroke="currentColor" strokeWidth="1.4" />
+            <circle cx="5" cy="13.5" r="2" stroke="currentColor" strokeWidth="1.4" />
+            <line x1="5" y1="6.5" x2="5" y2="11.5" stroke="currentColor" strokeWidth="1.4" />
+            <circle cx="13" cy="13.5" r="2" stroke="currentColor" strokeWidth="1.4" />
+            <polyline points="7,4.5 13,4.5 13,11.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    );
+}
+
 export function StorageIcon() {
     return (
         <svg {...common}>

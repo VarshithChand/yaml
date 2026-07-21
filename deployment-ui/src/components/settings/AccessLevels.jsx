@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 
 import useToast from "../../hooks/useToast";
 import usePagination from "../../hooks/usePagination";
 import Pagination from "../common/Pagination";
 import SearchBox from "../common/SearchBox";
+import InviteCollaborator from "./InviteCollaborator";
 
-import { getAccessEntries, inviteCollaborator, removeCollaborator, updateInvitation, removeInvitation } from "../../services/accessService";
+import { getAccessEntries, inviteCollaborator, removeCollaborator, updateInvitation, removeInvitation, assignUserToRepo } from "../../services/accessService";
+import { getAccountRepositories } from "../../services/githubService";
+import { getSettings } from "../../services/settingsService";
 import { PERMISSION_LEVELS, levelInfo } from "./permissionLevels";
 
 export default function AccessLevels() {
@@ -16,6 +19,16 @@ export default function AccessLevels() {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [busyLogin, setBusyLogin] = useState(null);
+
+    const [showInvite, setShowInvite] = useState(false);
+
+    // "Assign to another repo" — one row's panel open at a time.
+    const [assigningLogin, setAssigningLogin] = useState(null);
+    const [otherRepos, setOtherRepos] = useState(null);
+    const [loadingOtherRepos, setLoadingOtherRepos] = useState(false);
+    const [assignRepo, setAssignRepo] = useState("");
+    const [assignPermission, setAssignPermission] = useState("push");
+    const [assigning, setAssigning] = useState(false);
 
     async function load() {
 
@@ -124,6 +137,99 @@ export default function AccessLevels() {
 
     }
 
+    async function openAssignPanel(login) {
+
+        if (assigningLogin === login) {
+            setAssigningLogin(null);
+            return;
+        }
+
+        setAssigningLogin(login);
+        setAssignPermission("push");
+
+        if (otherRepos === null) {
+
+            try {
+
+                setLoadingOtherRepos(true);
+
+                const [reposResponse, settings] = await Promise.all([
+                    getAccountRepositories(),
+                    getSettings()
+                ]);
+
+                const currentFullName = settings.gitHubOwner && settings.gitHubRepository
+                    ? `${settings.gitHubOwner}/${settings.gitHubRepository}`.toLowerCase()
+                    : null;
+
+                const all = Array.isArray(reposResponse.data) ? reposResponse.data : [];
+
+                // "Assign to another repo" — the currently-configured repo
+                // isn't "another" one, so it's excluded rather than shown
+                // as a confusing no-op option.
+                const repos = currentFullName
+                    ? all.filter((r) => r.fullName.toLowerCase() !== currentFullName)
+                    : all;
+
+                setOtherRepos(repos);
+                setAssignRepo(repos[0]?.fullName || "");
+
+            }
+            catch (err) {
+
+                console.error(err);
+                toast.show("Unable to load this account's other repositories.", "error");
+                setOtherRepos([]);
+
+            }
+            finally {
+
+                setLoadingOtherRepos(false);
+
+            }
+
+        }
+        else {
+
+            setAssignRepo(otherRepos[0]?.fullName || "");
+
+        }
+
+    }
+
+    async function handleAssign(login) {
+
+        const repo = (otherRepos || []).find((r) => r.fullName === assignRepo);
+
+        if (!repo) {
+            toast.show("Pick a repository to assign this user to.", "error");
+            return;
+        }
+
+        try {
+
+            setAssigning(true);
+
+            await assignUserToRepo(login, repo.owner, repo.name, assignPermission);
+
+            toast.show(`Assigned ${login} to ${repo.fullName} as ${levelInfo(assignPermission).label}.`, "success");
+            setAssigningLogin(null);
+
+        }
+        catch (err) {
+
+            console.error(err);
+            toast.show(err.response?.data?.message || `Failed to assign ${login} to ${repo.fullName}.`, "error");
+
+        }
+        finally {
+
+            setAssigning(false);
+
+        }
+
+    }
+
     const {
         page, setPage, pageCount, pageItems, totalCount, startIndex, endIndex
     } = usePagination(filtered, 10);
@@ -132,9 +238,27 @@ export default function AccessLevels() {
 
         <div className="card">
 
-            <h2 className="card-title">
-                Access Levels
-            </h2>
+            <div className="access-panel-header">
+
+                <h2 className="card-title">
+                    Access Levels
+                </h2>
+
+                <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => setShowInvite((prev) => !prev)}
+                >
+                    {showInvite ? "Cancel" : "+ Invite"}
+                </button>
+
+            </div>
+
+            {showInvite && (
+
+                <InviteCollaborator onInvited={() => { setShowInvite(false); load(); }} />
+
+            )}
 
             <p className="empty-state" style={{ padding: "0 0 15px", textAlign: "left" }}>
                 Everyone with access to this repository, invited or already in. Changing someone's
@@ -181,7 +305,9 @@ export default function AccessLevels() {
 
                         {pageItems.map((entry) => (
 
-                            <tr key={`${entry.status}-${entry.login}`}>
+                            <Fragment key={`${entry.status}-${entry.login}`}>
+
+                            <tr>
 
                                 <td>
                                     <div className="access-user-cell">
@@ -210,16 +336,94 @@ export default function AccessLevels() {
                                 </td>
 
                                 <td>
-                                    <button
-                                        className="btn btn-danger btn-sm"
-                                        onClick={() => handleRemove(entry)}
-                                        disabled={busyLogin === entry.login}
-                                    >
-                                        {entry.status === "pending" ? "Cancel" : "Remove"}
-                                    </button>
+                                    <div className="access-row-actions">
+
+                                        {entry.status === "active" && (
+
+                                            <button
+                                                type="button"
+                                                className="btn btn-secondary btn-sm"
+                                                onClick={() => openAssignPanel(entry.login)}
+                                            >
+                                                {assigningLogin === entry.login ? "Close" : "Assign"}
+                                            </button>
+
+                                        )}
+
+                                        <button
+                                            className="btn btn-danger btn-sm"
+                                            onClick={() => handleRemove(entry)}
+                                            disabled={busyLogin === entry.login}
+                                        >
+                                            {entry.status === "pending" ? "Cancel" : "Remove"}
+                                        </button>
+
+                                    </div>
                                 </td>
 
                             </tr>
+
+                            {assigningLogin === entry.login && (
+
+                                <tr key={`${entry.login}-assign`}>
+                                    <td colSpan={4}>
+
+                                        <div className="access-assign-panel">
+
+                                            {loadingOtherRepos ? (
+
+                                                <p className="field-hint">Loading this account's repositories...</p>
+
+                                            ) : (otherRepos || []).length === 0 ? (
+
+                                                <p className="field-hint">No other repositories found for this account.</p>
+
+                                            ) : (
+
+                                                <div className="access-invite-controls">
+
+                                                    <select
+                                                        className="form-control"
+                                                        value={assignRepo}
+                                                        onChange={(e) => setAssignRepo(e.target.value)}
+                                                    >
+                                                        {otherRepos.map((r) => (
+                                                            <option key={r.fullName} value={r.fullName}>
+                                                                {r.fullName}{r.private ? " (private)" : ""}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+
+                                                    <select
+                                                        className="form-control access-permission-select"
+                                                        value={assignPermission}
+                                                        onChange={(e) => setAssignPermission(e.target.value)}
+                                                    >
+                                                        {PERMISSION_LEVELS.map((level) => (
+                                                            <option key={level.value} value={level.value}>{level.label}</option>
+                                                        ))}
+                                                    </select>
+
+                                                    <button
+                                                        className="btn btn-primary"
+                                                        onClick={() => handleAssign(entry.login)}
+                                                        disabled={assigning}
+                                                    >
+                                                        {assigning ? "Assigning..." : `Assign ${entry.login}`}
+                                                    </button>
+
+                                                </div>
+
+                                            )}
+
+                                        </div>
+
+                                    </td>
+                                </tr>
+
+                            )}
+
+                            </Fragment>
 
                         ))}
 

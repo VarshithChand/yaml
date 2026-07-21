@@ -268,6 +268,21 @@ public class GitHubApiService
         _cache.Remove($"branches:{_auth.Owner}/{_auth.Repository}");
     }
 
+    public async Task DeleteBranchAsync(string branch)
+    {
+        var client = _auth.CreateClient();
+
+        var url =
+            $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/git/refs/heads/{Uri.EscapeDataString(branch)}";
+
+        var response = await client.DeleteAsync(url);
+
+        await HttpClientHelper.EnsureSuccessAsync(response);
+
+        _cache.Remove($"branches:{_auth.Owner}/{_auth.Repository}");
+        _cache.Remove($"branch-restriction:{_auth.Owner}/{_auth.Repository}/{branch}");
+    }
+
     //===========================================================
     // Collaborators & Access Levels (Settings — Access Control sub-page)
     //===========================================================
@@ -326,6 +341,25 @@ public class GitHubApiService
         await HttpClientHelper.EnsureSuccessAsync(response);
 
         _cache.Remove($"collaborators:{_auth.Owner}/{_auth.Repository}");
+    }
+
+    // Same call as InviteCollaboratorAsync but against an arbitrary
+    // owner/repo instead of the configured one — "assign this collaborator
+    // to another repository" from the Access Levels page. Only works for
+    // repos the configured token's account can actually administer.
+    public async Task InviteCollaboratorToRepoAsync(string owner, string repository, string username, string permission)
+    {
+        var client = _auth.CreateClient();
+
+        var url =
+            $"https://api.github.com/repos/{owner}/{repository}/collaborators/{Uri.EscapeDataString(username)}";
+
+        var body = new { permission };
+        var json = System.Text.Json.JsonSerializer.Serialize(body);
+
+        var response = await client.PutAsync(url, new StringContent(json, Encoding.UTF8, "application/json"));
+
+        await HttpClientHelper.EnsureSuccessAsync(response);
     }
 
     public async Task RemoveCollaboratorAsync(string username)
@@ -1023,4 +1057,154 @@ public class GitHubApiService
 
         CommitMessage = x["head_commit"]?["message"]?.ToString() ?? string.Empty
     };
+
+    //===========================================================
+    // Pull Requests (new page — open PRs to review/merge, plus a
+    // closed/merged history and recent commit log)
+    //===========================================================
+
+    public Task<List<PullRequestDto>> GetOpenPullRequestsAsync(bool forceRefresh = false) =>
+        GetCachedAsync($"prs-open:{_auth.Owner}/{_auth.Repository}", async () =>
+        {
+            var client = _auth.CreateClient();
+
+            var url =
+                $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/pulls?state=open&per_page=100&sort=created&direction=desc";
+
+            var json = await HttpClientHelper.GetAsync(client, url);
+            var array = JArray.Parse(json);
+
+            return array.Select(MapPullRequest).ToList();
+        }, forceRefresh);
+
+    // Lightweight — the TopBar notification badge polls this instead of the
+    // full open-PR list (with titles/branches/etc.) every 30s.
+    public async Task<int> GetOpenPullRequestCountAsync()
+    {
+        var prs = await GetOpenPullRequestsAsync();
+        return prs.Count;
+    }
+
+    // "state=closed" includes both merged and simply-closed-without-merging
+    // PRs — GitHub distinguishes those via merged_at (null = closed, not
+    // merged), which MapPullRequest already surfaces.
+    public Task<List<PullRequestDto>> GetPullRequestHistoryAsync(bool forceRefresh = false) =>
+        GetCachedAsync($"prs-closed:{_auth.Owner}/{_auth.Repository}", async () =>
+        {
+            var client = _auth.CreateClient();
+
+            var url =
+                $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/pulls?state=closed&per_page=50&sort=updated&direction=desc";
+
+            var json = await HttpClientHelper.GetAsync(client, url);
+            var array = JArray.Parse(json);
+
+            return array.Select(MapPullRequest).ToList();
+        }, forceRefresh);
+
+    public Task<List<CommitDto>> GetRecentCommitsAsync(bool forceRefresh = false) =>
+        GetCachedAsync($"commits:{_auth.Owner}/{_auth.Repository}", async () =>
+        {
+            var client = _auth.CreateClient();
+
+            var url =
+                $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/commits?per_page=30";
+
+            var json = await HttpClientHelper.GetAsync(client, url);
+            var array = JArray.Parse(json);
+
+            return array.Select(x =>
+            {
+                // "author" is the linked GitHub account and is JSON null
+                // (not simply absent) when a commit's email isn't linked to
+                // one — as a JToken that's a JValue wrapping null, not a C#
+                // null, so `x["author"]?["login"]` would still invoke the
+                // indexer on it and throw rather than short-circuit. Cast
+                // through JObject first so the null-conditional actually
+                // short-circuits.
+                var author = x["author"] as JObject;
+
+                return new CommitDto
+                {
+                    Sha = x["sha"]?.ToString() ?? string.Empty,
+
+                    Message = (x["commit"]?["message"]?.ToString() ?? string.Empty).Split('\n')[0],
+
+                    Author = author?["login"]?.ToString()
+                        ?? x["commit"]?["author"]?["name"]?.ToString()
+                        ?? string.Empty,
+
+                    AuthorAvatarUrl = author?["avatar_url"]?.ToString() ?? string.Empty,
+
+                    Date = DateTime.TryParse(x["commit"]?["author"]?["date"]?.ToString(), out var date)
+                        ? date
+                        : DateTime.MinValue,
+
+                    HtmlUrl = x["html_url"]?.ToString() ?? string.Empty
+                };
+            }).ToList();
+        }, forceRefresh);
+
+    public async Task ApprovePullRequestAsync(int number)
+    {
+        var client = _auth.CreateClient();
+
+        var url =
+            $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/pulls/{number}/reviews";
+
+        var body = new { @event = "APPROVE" };
+        var json = System.Text.Json.JsonSerializer.Serialize(body);
+
+        var response = await client.PostAsync(url, new StringContent(json, Encoding.UTF8, "application/json"));
+
+        await HttpClientHelper.EnsureSuccessAsync(response);
+    }
+
+    public async Task MergePullRequestAsync(int number)
+    {
+        var client = _auth.CreateClient();
+
+        var url =
+            $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/pulls/{number}/merge";
+
+        var response = await client.PutAsync(url, new StringContent("{}", Encoding.UTF8, "application/json"));
+
+        await HttpClientHelper.EnsureSuccessAsync(response);
+
+        _cache.Remove($"prs-open:{_auth.Owner}/{_auth.Repository}");
+        _cache.Remove($"prs-closed:{_auth.Owner}/{_auth.Repository}");
+    }
+
+    // x["user"] cast through JObject first, same reasoning as
+    // GetRecentCommitsAsync's "author" field — a PR's author is JSON null
+    // (a JValue, not an absent key or a C# null) for a deleted/ghost
+    // GitHub account, and the plain `?[...]` indexer chain would throw
+    // instead of short-circuiting on that.
+    private static PullRequestDto MapPullRequest(JToken x)
+    {
+        var user = x["user"] as JObject;
+
+        return new PullRequestDto
+        {
+            Number = (int?)x["number"] ?? 0,
+
+            Title = x["title"]?.ToString() ?? string.Empty,
+
+            Author = user?["login"]?.ToString() ?? string.Empty,
+
+            AuthorAvatarUrl = user?["avatar_url"]?.ToString() ?? string.Empty,
+
+            HeadBranch = x["head"]?["ref"]?.ToString() ?? string.Empty,
+
+            BaseBranch = x["base"]?["ref"]?.ToString() ?? string.Empty,
+
+            Draft = (bool?)x["draft"] ?? false,
+
+            CreatedAt = DateTime.TryParse(x["created_at"]?.ToString(), out var createdAt) ? createdAt : DateTime.MinValue,
+
+            MergedAt = DateTime.TryParse(x["merged_at"]?.ToString(), out var mergedAt) ? mergedAt : null,
+
+            HtmlUrl = x["html_url"]?.ToString() ?? string.Empty
+        };
+    }
 }

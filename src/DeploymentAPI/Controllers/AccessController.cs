@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using DeploymentAPI.DTOs;
 using DeploymentAPI.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -70,6 +71,28 @@ public class AccessController : ControllerBase
         return Ok(await _github.GetAccessEntriesAsync(forceRefresh: true));
     }
 
+    // Access Levels page: give an existing collaborator access to a
+    // *different* repository too — reuses the same invite call against a
+    // different owner/repo, so it only works for repos the configured
+    // token's account can actually administer.
+    [HttpPut("collaborators/{username}/assign-repo")]
+    public async Task<IActionResult> AssignToRepo(string username, AssignRepoDto request)
+    {
+        if (await DenyUnlessAdminAsync() is IActionResult denied)
+            return denied;
+
+        if (string.IsNullOrWhiteSpace(request.Owner) || string.IsNullOrWhiteSpace(request.Repository))
+            return BadRequest(new { message = "Pick a repository to assign this user to." });
+
+        var permission = string.IsNullOrWhiteSpace(request.Permission) ? "push" : request.Permission;
+
+        await _github.InviteCollaboratorToRepoAsync(request.Owner, request.Repository, username, permission);
+
+        _log.LogInfo("Access", $"Assigned '{username}' to {request.Owner}/{request.Repository} with '{permission}' access.");
+
+        return Ok();
+    }
+
     // Access Levels page: change a still-pending invitation's level.
     // GitHub also emails the invitee about this automatically.
     [HttpPut("invitations/{invitationId}")]
@@ -109,9 +132,36 @@ public class AccessController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.SourceBranch))
             return BadRequest(new { message = "A branch name and a source branch are both required." });
 
-        await _github.CreateBranchAsync(request.Name.Trim(), request.SourceBranch);
+        var name = request.Name.Trim();
 
-        _log.LogInfo("Access", $"Created branch '{request.Name}' from '{request.SourceBranch}'.");
+        await _github.CreateBranchAsync(name, request.SourceBranch);
+        await _settings.SaveBranchCreatorAsync(name, CurrentLogin() ?? "unknown");
+
+        _log.LogInfo("Access", $"Created branch '{name}' from '{request.SourceBranch}'.");
+
+        return Ok(await _github.GetBranches(forceRefresh: true));
+    }
+
+    // The creator (recorded when the branch was made through this portal)
+    // or an admin can delete a branch — either is sufficient, so the
+    // creator check short-circuits the admin gate entirely rather than
+    // being an additional requirement on top of it.
+    [HttpDelete("branches/{branch}")]
+    public async Task<IActionResult> DeleteBranch(string branch)
+    {
+        var creators = await _settings.GetBranchCreatorsAsync();
+        var isCreator = creators.TryGetValue(branch, out var creator)
+            && !string.IsNullOrEmpty(creator)
+            && string.Equals(creator, CurrentLogin(), StringComparison.OrdinalIgnoreCase);
+
+        if (!isCreator && await DenyUnlessAdminAsync() is IActionResult denied)
+            return denied;
+
+        await _github.DeleteBranchAsync(branch);
+        await _settings.RemoveBranchCreatorAsync(branch);
+        await _settings.SaveBranchPurposeAsync(branch, string.Empty);
+
+        _log.LogInfo("Access", $"Deleted branch '{branch}' (by {(isCreator ? "its creator" : "an admin")}).");
 
         return Ok(await _github.GetBranches(forceRefresh: true));
     }
@@ -121,6 +171,7 @@ public class AccessController : ControllerBase
     {
         var branches = await _github.GetBranches(force);
         var purposes = await _settings.GetBranchPurposesAsync();
+        var creators = await _settings.GetBranchCreatorsAsync();
 
         var result = new List<BranchAccessDto>();
 
@@ -133,7 +184,8 @@ public class AccessController : ControllerBase
                 Name = branch.Name,
                 Purpose = purposes.TryGetValue(branch.Name, out var purpose) ? purpose : string.Empty,
                 Restricted = restricted,
-                AllowedUsers = allowedUsers
+                AllowedUsers = allowedUsers,
+                Creator = creators.TryGetValue(branch.Name, out var creator) ? creator : string.Empty
             });
         }
 
@@ -196,4 +248,9 @@ public class AccessController : ControllerBase
 
         return StatusCode(403, new { message = "Admin login required to change repository access." });
     }
+
+    // The only claim AuthService ever issues for the GitHub username is
+    // ClaimTypes.Name — null when unauthenticated (PAT-only/anonymous mode),
+    // which is a legitimate outcome, not an error, wherever this is used.
+    private string? CurrentLogin() => User.FindFirst(ClaimTypes.Name)?.Value;
 }

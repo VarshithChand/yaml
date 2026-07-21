@@ -1,6 +1,7 @@
 import Dashboard from "./pages/Dashboard";
 import Deploy from "./pages/Deploy";
 import Approvals from "./pages/Approvals";
+import PullRequests from "./pages/PullRequests";
 import Storage from "./pages/Storage";
 import History from "./pages/History";
 import Analytics from "./pages/Analytics";
@@ -35,6 +36,7 @@ function App(){
                         {tab === "dashboard" && <Dashboard/>}
                         {tab === "deploy" && <Deploy/>}
                         {tab === "approvals" && <Approvals/>}
+                        {tab === "pullRequests" && <PullRequests/>}
                         {tab === "storage" && <Storage/>}
                         {tab === "analytics" && <Analytics/>}
                         {tab === "timeline" && <Timeline/>}

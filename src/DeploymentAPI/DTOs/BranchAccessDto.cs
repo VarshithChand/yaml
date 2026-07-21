@@ -12,4 +12,9 @@ public class BranchAccessDto
     public bool Restricted { get; set; }
 
     public List<string> AllowedUsers { get; set; } = new();
+
+    // Portal login of whoever created this branch through the portal — empty
+    // for branches that existed before this was tracked, or were created
+    // outside the portal. Drives "the creator or an admin can delete it."
+    public string Creator { get; set; } = string.Empty;
 }

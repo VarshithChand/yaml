@@ -14,7 +14,6 @@ import { getLogs } from "../services/logsService";
 
 import LoadingSpinner from "../components/LoadingSpinner";
 import PageLayout from "../components/layout/PageLayout";
-import InviteCollaborator from "../components/settings/InviteCollaborator";
 import AccessLevels from "../components/settings/AccessLevels";
 import BranchManager from "../components/settings/BranchManager";
 import ComboBox from "../components/common/ComboBox";
@@ -467,7 +466,6 @@ export default function Settings() {
     const pageTitle =
         view === "credentials" ? "Credentials"
         : view === "activity-log" ? "Activity Log"
-        : view === "invite" ? "Invite Collaborator"
         : view === "access-levels" ? "Access Levels"
         : view === "branches" ? "Branches"
         : "Settings";
@@ -498,19 +496,11 @@ export default function Settings() {
                         </p>
                     </button>
 
-                    <button type="button" className="settings-hub-tile" onClick={() => setView("invite")}>
-                        <h2>Invite Collaborator</h2>
-                        <p>
-                            Give a GitHub account access to this repository and set their
-                            starting permission level.
-                        </p>
-                    </button>
-
                     <button type="button" className="settings-hub-tile" onClick={() => setView("access-levels")}>
                         <h2>Access Levels</h2>
                         <p>
-                            Everyone with access, invited or already in — change or revoke what
-                            they can do.
+                            Everyone with access, invited or already in — invite, change, or
+                            revoke what they can do.
                         </p>
                     </button>
 
@@ -963,20 +953,6 @@ export default function Settings() {
                 )}
 
             </div>
-
-            </>
-
-            )}
-
-            {view === "invite" && (
-
-            <>
-
-            <button type="button" className="settings-back-link" onClick={() => setView("hub")}>
-                ← Back to Settings
-            </button>
-
-            <InviteCollaborator />
 
             </>
 

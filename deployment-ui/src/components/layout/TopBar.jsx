@@ -6,6 +6,7 @@ import usePolling from "../../hooks/usePolling";
 import Logo from "../common/Logo";
 import AccountAvatar from "../common/AccountAvatar";
 import { getRateLimit } from "../../services/githubService";
+import { getPullRequestCount } from "../../services/pullRequestsService";
 
 // The slim top strip: brand mark on the left, account/rate-limit controls
 // on the right. Primary navigation and the theme toggle both live in
@@ -13,10 +14,11 @@ import { getRateLimit } from "../../services/githubService";
 // doesn't need its own collapse/hamburger behavior, just normal flex-wrap.
 export default function TopBar() {
 
-    const { user, loading, login, logout, oauthConfigured, tokenOwner } = useAuth();
+    const { user, loading, login, logout, oauthConfigured, tokenOwner, canApproveReleases } = useAuth();
     const { setTab } = useNavigation();
 
     const [rateLimit, setRateLimit] = useState(null);
+    const [prCount, setPrCount] = useState(0);
 
     async function loadRateLimit() {
 
@@ -39,6 +41,26 @@ export default function TopBar() {
     // usePolling fires once immediately on mount, then on the interval.
     usePolling(loadRateLimit, 30000);
 
+    async function loadPullRequestCount() {
+
+        if (!canApproveReleases) return;
+
+        try {
+
+            const response = await getPullRequestCount();
+            setPrCount(response.data?.count || 0);
+
+        }
+        catch (err) {
+
+            console.error(err);
+
+        }
+
+    }
+
+    usePolling(loadPullRequestCount, 30000);
+
     return (
 
         <header className="top-bar">
@@ -48,6 +70,19 @@ export default function TopBar() {
             </div>
 
             <div className="top-bar-actions">
+
+                {canApproveReleases && prCount > 0 && (
+
+                    <button
+                        type="button"
+                        className="pr-notification-badge"
+                        onClick={() => setTab("pullRequests")}
+                        title={`${prCount} open pull request${prCount === 1 ? "" : "s"} waiting`}
+                    >
+                        {prCount} PR{prCount === 1 ? "" : "s"}
+                    </button>
+
+                )}
 
                 {!loading && (
 

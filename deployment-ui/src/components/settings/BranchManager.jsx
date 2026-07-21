@@ -9,7 +9,8 @@ import {
     saveBranchPurpose,
     setBranchRestriction,
     removeBranchRestriction,
-    createBranch
+    createBranch,
+    deleteBranch
 } from "../../services/accessService";
 
 export default function BranchManager() {
@@ -31,6 +32,7 @@ export default function BranchManager() {
     const [newBranchName, setNewBranchName] = useState("");
     const [sourceBranch, setSourceBranch] = useState("");
     const [creatingBranch, setCreatingBranch] = useState(false);
+    const [deletingBranch, setDeletingBranch] = useState(null);
 
     async function loadCollaborators() {
 
@@ -132,6 +134,37 @@ export default function BranchManager() {
         finally {
 
             setCreatingBranch(false);
+
+        }
+
+    }
+
+    async function handleDeleteBranch(branch) {
+
+        if (!window.confirm(`Delete branch '${branch}'? This cannot be undone.`)) {
+            return;
+        }
+
+        try {
+
+            setDeletingBranch(branch);
+
+            await deleteBranch(branch);
+
+            toast.show(`Branch '${branch}' deleted.`, "success");
+            setExpandedBranch((prev) => (prev === branch ? null : prev));
+            loadBranches();
+
+        }
+        catch (err) {
+
+            console.error(err);
+            toast.show(err.response?.data?.message || `Failed to delete '${branch}'.`, "error");
+
+        }
+        finally {
+
+            setDeletingBranch(null);
 
         }
 
@@ -335,17 +368,34 @@ export default function BranchManager() {
                                     <span className="badge badge-secondary">Open</span>
                                 )}
 
+                                {b.creator && (
+                                    <span className="access-branch-creator">created by {b.creator}</span>
+                                )}
+
                                 {b.purpose && (
                                     <span className="access-branch-purpose-preview">{b.purpose}</span>
                                 )}
 
-                                <button
-                                    type="button"
-                                    className="access-branch-toggle"
-                                    onClick={() => setExpandedBranch(expandedBranch === b.name ? null : b.name)}
-                                >
-                                    {expandedBranch === b.name ? "Hide" : "Manage"}
-                                </button>
+                                <div className="access-branch-actions">
+
+                                    <button
+                                        type="button"
+                                        className="access-branch-toggle"
+                                        onClick={() => setExpandedBranch(expandedBranch === b.name ? null : b.name)}
+                                    >
+                                        {expandedBranch === b.name ? "Hide" : "Manage"}
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        className="access-branch-toggle access-branch-delete"
+                                        onClick={() => handleDeleteBranch(b.name)}
+                                        disabled={deletingBranch === b.name}
+                                    >
+                                        {deletingBranch === b.name ? "Deleting..." : "Delete"}
+                                    </button>
+
+                                </div>
 
                             </div>
 

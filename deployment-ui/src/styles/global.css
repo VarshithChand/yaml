@@ -528,6 +528,62 @@ textarea{
    ACCESS CONTROL (Settings sub-page)
 ========================================== */
 
+.access-panel-header{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:space-between;
+
+    gap:12px;
+
+    margin-bottom:15px;
+
+}
+
+.access-panel-header .card-title{
+
+    margin-bottom:0;
+
+}
+
+.access-invite-panel{
+
+    padding:16px;
+
+    margin-bottom:20px;
+
+    background:var(--bg);
+
+    border:1px solid var(--border);
+
+    border-radius:8px;
+
+}
+
+.access-row-actions{
+
+    display:flex;
+
+    gap:8px;
+
+    justify-content:flex-end;
+
+}
+
+.access-assign-panel{
+
+    padding:14px;
+
+    background:var(--bg);
+
+    border:1px solid var(--border);
+
+    border-radius:8px;
+
+}
+
 .access-level-legend{
 
     display:flex;
@@ -700,9 +756,31 @@ textarea{
 
 }
 
-.access-branch-header .access-branch-toggle{
+.access-branch-creator{
+
+    flex-shrink:0;
+
+    color:var(--text-muted);
+
+    font-size:12px;
+
+    font-style:italic;
+
+}
+
+.access-branch-actions{
+
+    flex-shrink:0;
 
     margin-left:auto;
+
+    display:flex;
+
+    gap:8px;
+
+}
+
+.access-branch-header .access-branch-toggle{
 
     padding:6px 14px;
 
@@ -719,6 +797,22 @@ textarea{
     font-weight:600;
 
     cursor:pointer;
+
+}
+
+.access-branch-header .access-branch-delete{
+
+    border-color:#dc2626;
+
+    color:#dc2626;
+
+}
+
+.access-branch-header .access-branch-delete:hover:not(:disabled){
+
+    background:#dc2626;
+
+    color:#ffffff;
 
 }
 
@@ -1224,6 +1318,38 @@ textarea{
     align-items:center;
 
     gap:8px;
+
+}
+
+.pr-notification-badge{
+
+    display:inline-flex;
+
+    align-items:center;
+
+    padding:6px 12px;
+
+    border:none;
+
+    border-radius:20px;
+
+    background:#d97706;
+
+    color:#ffffff;
+
+    font-size:13px;
+
+    font-weight:700;
+
+    cursor:pointer;
+
+    transition:background-color .15s ease;
+
+}
+
+.pr-notification-badge:hover{
+
+    background:#b45309;
 
 }
 

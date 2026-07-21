@@ -29,8 +29,16 @@ export const removeInvitation = async (invitationId) => {
     return await api.delete(`/invitations/${invitationId}`);
 };
 
+export const assignUserToRepo = async (username, owner, repository, permission) => {
+    return await api.put(`/collaborators/${encodeURIComponent(username)}/assign-repo`, { owner, repository, permission });
+};
+
 export const createBranch = async (name, sourceBranch) => {
     return await api.post("/branches", { name, sourceBranch });
+};
+
+export const deleteBranch = async (branch) => {
+    return await api.delete(`/branches/${encodeURIComponent(branch)}`);
 };
 
 export const getBranchAccess = async (force = false) => {

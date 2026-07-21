@@ -4,7 +4,10 @@ import useToast from "../../hooks/useToast";
 import { inviteCollaborator } from "../../services/accessService";
 import { PERMISSION_LEVELS, levelInfo } from "./permissionLevels";
 
-export default function InviteCollaborator() {
+// Embedded inline panel (no outer .card of its own) — lives inside the
+// Access Levels page, toggled open by its "+ Invite" button, rather than
+// being a separate Settings hub tile/page.
+export default function InviteCollaborator({ onInvited }) {
 
     const toast = useToast();
 
@@ -29,9 +32,11 @@ export default function InviteCollaborator() {
             setUsername("");
 
             toast.show(
-                `Invited ${trimmed} as ${levelInfo(permission).label}. Find them under Access Levels once they've accepted.`,
+                `Invited ${trimmed} as ${levelInfo(permission).label}. They'll show up below as "Pending" until they accept.`,
                 "success"
             );
+
+            onInvited?.();
 
         }
         catch (err) {
@@ -50,16 +55,11 @@ export default function InviteCollaborator() {
 
     return (
 
-        <div className="card">
-
-            <h2 className="card-title">
-                Invite a Collaborator
-            </h2>
+        <div className="access-invite-panel">
 
             <p className="empty-state" style={{ padding: "0 0 15px", textAlign: "left" }}>
                 Give a GitHub account access to this repository. GitHub emails them an invitation
-                automatically — nothing further to send from here. They'll show up under{" "}
-                <strong>Access Levels</strong> as "Pending" until they accept.
+                automatically — nothing further to send from here.
             </p>
 
             <div className="access-level-legend">
@@ -89,6 +89,7 @@ export default function InviteCollaborator() {
                         onChange={(e) => setUsername(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && handleInvite()}
                         autoComplete="off"
+                        autoFocus
                     />
 
                     <select

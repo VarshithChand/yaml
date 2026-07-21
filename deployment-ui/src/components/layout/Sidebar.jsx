@@ -8,6 +8,7 @@ import {
     DashboardIcon,
     DeployIcon,
     ApprovalsIcon,
+    PullRequestIcon,
     StorageIcon,
     AnalyticsIcon,
     TimelineIcon,
@@ -19,10 +20,16 @@ import {
     MoonIcon
 } from "./SidebarIcons";
 
+// Approvals and Pull Requests are both gated on the same repo-admin
+// permission (canApproveReleases) — listed together so the filter below
+// can hide either with one check.
+const GATED_TABS = new Set(["approvals", "pullRequests"]);
+
 const TABS = [
     { key: "dashboard", label: "Dashboard", Icon: DashboardIcon },
     { key: "deploy", label: "Deploy", Icon: DeployIcon },
     { key: "approvals", label: "Approvals", Icon: ApprovalsIcon },
+    { key: "pullRequests", label: "Pull Requests", Icon: PullRequestIcon },
     { key: "storage", label: "Artifacts & Images", Icon: StorageIcon },
     { key: "analytics", label: "Analytics", Icon: AnalyticsIcon },
     { key: "timeline", label: "Timeline", Icon: TimelineIcon },
@@ -51,7 +58,7 @@ export default function Sidebar() {
 
     });
 
-    const visibleTabs = TABS.filter((t) => t.key !== "approvals" || canApproveReleases);
+    const visibleTabs = TABS.filter((t) => !GATED_TABS.has(t.key) || canApproveReleases);
 
     function toggleCollapsed() {
 
