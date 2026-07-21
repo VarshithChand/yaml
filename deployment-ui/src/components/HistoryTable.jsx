@@ -55,7 +55,11 @@ export default function HistoryTable({ runs = [] }) {
 
                             </td>
 
-                            <td>{run.conclusion}</td>
+                            <td>
+                                {run.conclusion
+                                    ? <StatusBadge status={run.conclusion} />
+                                    : "-"}
+                            </td>
 
                             <td>{run.triggeredBy}</td>
 
