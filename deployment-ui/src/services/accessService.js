@@ -3,6 +3,10 @@ import api from "../api/accessApi";
 // Raw axios responses (not unwrapped) — same convention as githubService.js,
 // since this talks to the same GitHub-backed data.
 
+export const getRepoInfo = async () => {
+    return await api.get("/repo-info");
+};
+
 // Active collaborators only — for the branch "restrict who can push" picker.
 export const getCollaborators = async (force = false) => {
     return await api.get("/collaborators", { params: force ? { force: true } : {} });

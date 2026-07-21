@@ -99,6 +99,21 @@ namespace DeploymentAPI.Helpers
             };
         }
 
+        // "invalid value for 'field' on 'resource'" — a generic but readable
+        // sentence built from whatever subset of resource/field/code/value
+        // GitHub actually included, rather than the raw JSON object.
+        private static string DescribeErrorObject(JObject error)
+        {
+            var field = error["field"]?.ToString();
+            var resource = error["resource"]?.ToString();
+            var code = error["code"]?.ToString();
+
+            if (!string.IsNullOrWhiteSpace(field) && !string.IsNullOrWhiteSpace(resource))
+                return $"invalid value for '{field}' on {resource}" + (string.IsNullOrWhiteSpace(code) ? "" : $" ({code})");
+
+            return error.ToString(Newtonsoft.Json.Formatting.None);
+        }
+
         private static string? ExtractGitHubMessage(string body)
         {
             try
@@ -113,12 +128,17 @@ namespace DeploymentAPI.Helpers
                 // restriction was rejected). Appended when present instead
                 // of replacing the top-level message, since some responses
                 // only have one or the other.
-                // Each element can be either an object ({"message": "..."})
-                // or a plain string, depending on the endpoint — (e as
-                // JObject) is null (not a throw) for the plain-string case,
-                // so it falls through to e.ToString().
+                // Each element can be a plain string, an object with its own
+                // "message", or — as GitHub actually returns for something
+                // like "you can't set field X to value Y" — an object with
+                // only resource/field/code and no message at all. That last
+                // shape used to fall through to e.ToString(), dumping raw
+                // JSON braces at the user; DescribeErrorObject turns it into
+                // a short readable phrase instead.
                 var detail = (json["errors"] as JArray)?
-                    .Select(e => (e as JObject)?["message"]?.ToString() ?? e.ToString())
+                    .Select(e => (e as JObject) is JObject obj
+                        ? obj["message"]?.ToString() ?? DescribeErrorObject(obj)
+                        : e.ToString())
                     .Where(m => !string.IsNullOrWhiteSpace(m))
                     .ToList();
 

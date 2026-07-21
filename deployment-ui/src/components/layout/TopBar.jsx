@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import useAuth from "../../hooks/useAuth";
 import useNavigation from "../../hooks/useNavigation";
 import usePolling from "../../hooks/usePolling";
 import Logo from "../common/Logo";
 import AccountAvatar from "../common/AccountAvatar";
+import ActivityBell from "./ActivityBell";
 import { getRateLimit } from "../../services/githubService";
 import { getPullRequestCount } from "../../services/pullRequestsService";
+import { getSettings } from "../../services/settingsService";
 
 // The slim top strip: brand mark on the left, account/rate-limit controls
 // on the right. Primary navigation and the theme toggle both live in
@@ -19,6 +21,21 @@ export default function TopBar() {
 
     const [rateLimit, setRateLimit] = useState(null);
     const [prCount, setPrCount] = useState(0);
+    const [repoName, setRepoName] = useState("");
+
+    // One-time fetch — the repo only changes via the Settings page saving
+    // new GitHub settings, which already does a full page reload afterward.
+    useEffect(() => {
+
+        getSettings()
+            .then((settings) => {
+                if (settings.gitHubOwner && settings.gitHubRepository) {
+                    setRepoName(`${settings.gitHubOwner}/${settings.gitHubRepository}`);
+                }
+            })
+            .catch((err) => console.error(err));
+
+    }, []);
 
     async function loadRateLimit() {
 
@@ -70,6 +87,16 @@ export default function TopBar() {
             </div>
 
             <div className="top-bar-actions">
+
+                {repoName && (
+
+                    <span className="repo-name-badge" title="Configured repository">
+                        {repoName}
+                    </span>
+
+                )}
+
+                <ActivityBell />
 
                 {canApproveReleases && prCount > 0 && (
 

@@ -6,10 +6,10 @@ import Pagination from "../common/Pagination";
 import SearchBox from "../common/SearchBox";
 import InviteCollaborator from "./InviteCollaborator";
 
-import { getAccessEntries, inviteCollaborator, removeCollaborator, updateInvitation, removeInvitation, assignUserToRepo } from "../../services/accessService";
+import { getAccessEntries, inviteCollaborator, removeCollaborator, updateInvitation, removeInvitation, assignUserToRepo, getRepoInfo } from "../../services/accessService";
 import { getAccountRepositories } from "../../services/githubService";
 import { getSettings } from "../../services/settingsService";
-import { PERMISSION_LEVELS, levelInfo } from "./permissionLevels";
+import { PERMISSION_LEVELS, availableLevels, levelInfo } from "./permissionLevels";
 
 export default function AccessLevels() {
 
@@ -20,6 +20,8 @@ export default function AccessLevels() {
     const [search, setSearch] = useState("");
     const [levelFilter, setLevelFilter] = useState("");
     const [busyLogin, setBusyLogin] = useState(null);
+    const [isOrganization, setIsOrganization] = useState(false);
+    const levels = availableLevels(isOrganization);
 
     const [showInvite, setShowInvite] = useState(false);
 
@@ -57,6 +59,10 @@ export default function AccessLevels() {
 
         load();
 
+        getRepoInfo()
+            .then((response) => setIsOrganization(!!response.data?.isOrganization))
+            .catch((err) => console.error(err));
+
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -72,6 +78,20 @@ export default function AccessLevels() {
 
     async function handleChangePermission(entry, permission) {
 
+        // GitHub has no in-place way to change an active collaborator's
+        // level — the only call that actually applies it removes them and
+        // sends a fresh invitation (verified directly: an in-place update
+        // silently no-ops). Confirmed up front rather than doing it
+        // silently, since it's a real, disruptive side effect the admin
+        // should choose knowingly, not discover after the fact.
+        if (entry.status === "active" && !window.confirm(
+            `GitHub can't change ${entry.login}'s level in place. Setting it to ${levelInfo(permission).label} ` +
+            `will remove ${entry.login} and send a new invitation — they'll need to accept it again before they ` +
+            `have access. Continue?`
+        )) {
+            return;
+        }
+
         try {
 
             setBusyLogin(entry.login);
@@ -84,15 +104,8 @@ export default function AccessLevels() {
             }
             else {
 
-                // GitHub only actually applies a permission change for an
-                // active collaborator by removing and re-inviting them —
-                // there's no in-place update. They'll show as "Pending"
-                // again below until they accept.
                 await inviteCollaborator(entry.login, permission);
-                toast.show(
-                    `${entry.login} was removed and re-invited at ${levelInfo(permission).label} — GitHub has no way to change an existing collaborator's level in place. They'll need to accept again.`,
-                    "success"
-                );
+                toast.show(`${entry.login} re-invited at ${levelInfo(permission).label}.`, "success");
 
             }
 
@@ -269,7 +282,7 @@ export default function AccessLevels() {
 
             {showInvite && (
 
-                <InviteCollaborator onInvited={() => { setShowInvite(false); load(); }} />
+                <InviteCollaborator isOrganization={isOrganization} onInvited={() => { setShowInvite(false); load(); }} />
 
             )}
 
@@ -294,7 +307,7 @@ export default function AccessLevels() {
                     onChange={(e) => setLevelFilter(e.target.value)}
                 >
                     <option value="">All levels</option>
-                    {PERMISSION_LEVELS.map((level) => (
+                    {levels.map((level) => (
                         <option key={level.value} value={level.value}>{level.label}</option>
                     ))}
                 </select>
@@ -360,7 +373,7 @@ export default function AccessLevels() {
                                         disabled={busyLogin === entry.login}
                                         onChange={(e) => handleChangePermission(entry, e.target.value)}
                                     >
-                                        {PERMISSION_LEVELS.map((level) => (
+                                        {levels.map((level) => (
                                             <option key={level.value} value={level.value}>{level.label}</option>
                                         ))}
                                     </select>

@@ -2,14 +2,16 @@ import { useState } from "react";
 
 import useToast from "../../hooks/useToast";
 import { inviteCollaborator } from "../../services/accessService";
-import { PERMISSION_LEVELS, levelInfo } from "./permissionLevels";
+import { availableLevels, levelInfo } from "./permissionLevels";
 
 // Embedded inline panel (no outer .card of its own) — lives inside the
 // Access Levels page, toggled open by its "+ Invite" button, rather than
-// being a separate Settings hub tile/page.
-export default function InviteCollaborator({ onInvited }) {
+// being a separate Settings hub tile/page. isOrganization is fetched once
+// by the parent (Access Levels) rather than duplicated here.
+export default function InviteCollaborator({ onInvited, isOrganization }) {
 
     const toast = useToast();
+    const levels = availableLevels(isOrganization);
 
     const [username, setUsername] = useState("");
     const [permission, setPermission] = useState("push");
@@ -64,7 +66,7 @@ export default function InviteCollaborator({ onInvited }) {
 
             <div className="access-level-legend">
 
-                {PERMISSION_LEVELS.map((level) => (
+                {levels.map((level) => (
 
                     <div key={level.value} className="access-level-legend-item">
                         <span className={`badge ${level.badge}`}>{level.label}</span>
@@ -74,6 +76,13 @@ export default function InviteCollaborator({ onInvited }) {
                 ))}
 
             </div>
+
+            {!isOrganization && (
+                <p className="field-hint">
+                    Triage and Maintain aren't offered — GitHub only supports those on
+                    organization-owned repositories, and this one is personal.
+                </p>
+            )}
 
             <div className="form-group">
 
@@ -97,7 +106,7 @@ export default function InviteCollaborator({ onInvited }) {
                         value={permission}
                         onChange={(e) => setPermission(e.target.value)}
                     >
-                        {PERMISSION_LEVELS.map((level) => (
+                        {levels.map((level) => (
                             <option key={level.value} value={level.value}>{level.label}</option>
                         ))}
                     </select>

@@ -25,6 +25,15 @@ public class AccessController : ControllerBase
         _log = log;
     }
 
+    // Lets the Access Levels/Invite pages hide Triage and Maintain up
+    // front on a personal-account repo instead of only finding out via a
+    // rejected request.
+    [HttpGet("repo-info")]
+    public async Task<IActionResult> RepoInfo()
+    {
+        return Ok(new { isOrganization = await _github.IsOrganizationOwnedAsync() });
+    }
+
     // Active collaborators only — used by the Branches page's "restrict who
     // can push" picker, since a pending invite can't push yet regardless.
     [HttpGet("collaborators")]

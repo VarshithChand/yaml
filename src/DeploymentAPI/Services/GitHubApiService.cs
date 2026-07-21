@@ -214,6 +214,19 @@ public class GitHubApiService
             return await HttpClientHelper.GetAsync(client, url);
         }, forceRefresh);
 
+    // Triage and Maintain are organization-only collaborator permission
+    // levels — GitHub rejects them outright (422, "invalid value for
+    // 'permissions'") when the repo's owner is a personal account rather
+    // than an organization. Checked so the Access Levels page can hide
+    // those two options instead of letting someone hit that error.
+    public async Task<bool> IsOrganizationOwnedAsync()
+    {
+        var json = await GetRepository();
+        var ownerType = JObject.Parse(json)["owner"]?["type"]?.ToString();
+
+        return string.Equals(ownerType, "Organization", StringComparison.OrdinalIgnoreCase);
+    }
+
     //===========================================================
     // Branches
     //===========================================================
@@ -1160,6 +1173,49 @@ public class GitHubApiService
                 };
             }).ToList();
         }, forceRefresh);
+
+    //===========================================================
+    // Recent Activity (TopBar notification bell) — recent commits and
+    // recent workflow runs merged into one time-sorted feed. Both lists
+    // are already independently cached/polled elsewhere (History,
+    // Dashboard, the PR page), so this doesn't add new GitHub load beyond
+    // what the app already fetches.
+    //===========================================================
+
+    public async Task<List<ActivityEventDto>> GetRecentActivityAsync()
+    {
+        var commits = await GetRecentCommitsAsync();
+        var runs = await GetWorkflowRuns();
+
+        var events = new List<ActivityEventDto>();
+
+        events.AddRange(commits.Take(15).Select(c => new ActivityEventDto
+        {
+            Type = "commit",
+            Title = c.Message,
+            Detail = c.Sha.Length >= 7 ? c.Sha[..7] : c.Sha,
+            Actor = c.Author,
+            ActorAvatarUrl = c.AuthorAvatarUrl,
+            Timestamp = c.Date,
+            HtmlUrl = c.HtmlUrl
+        }));
+
+        events.AddRange(runs.Take(15).Select(r => new ActivityEventDto
+        {
+            Type = "workflow",
+            Title = r.Name,
+            Detail = r.Status == "completed" ? r.Conclusion : r.Status,
+            Actor = r.TriggeredBy,
+            ActorAvatarUrl = string.Empty,
+            Timestamp = r.CreatedAt,
+            HtmlUrl = $"https://github.com/{_auth.Owner}/{_auth.Repository}/actions/runs/{r.Id}"
+        }));
+
+        return events
+            .OrderByDescending(e => e.Timestamp)
+            .Take(20)
+            .ToList();
+    }
 
     public async Task ApprovePullRequestAsync(int number)
     {

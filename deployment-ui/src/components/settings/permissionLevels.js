@@ -14,3 +14,13 @@ export function levelInfo(permission) {
     return PERMISSION_LEVELS.find((l) => l.value === permission)
         || { value: permission, label: permission || "Unknown", badge: "badge-secondary", description: "" };
 }
+
+// Triage and Maintain are organization-only collaborator levels — GitHub
+// rejects them outright on a personal-account repo. Filtered out here so
+// the dropdowns only ever offer levels that will actually work, instead
+// of letting someone pick one and hit a rejection.
+export function availableLevels(isOrganization) {
+    return isOrganization
+        ? PERMISSION_LEVELS
+        : PERMISSION_LEVELS.filter((l) => l.value !== "triage" && l.value !== "maintain");
+}
