@@ -323,43 +323,59 @@ public class GitHubApiService
         _ => roleName ?? string.Empty
     };
 
-    // PUT .../collaborators/{username} both invites a new user AND updates
-    // an existing collaborator's permission level — GitHub uses the same
-    // endpoint for both, so there's no separate "change access level" call.
-    public async Task InviteCollaboratorAsync(string username, string permission)
+    // GitHub's docs describe PUT .../collaborators/{username} as both
+    // inviting a new user AND updating an existing collaborator's
+    // permission — that second half turned out not to be true. Verified
+    // directly against a real repo: calling this again for someone already
+    // an accepted collaborator returns success but silently leaves their
+    // permission unchanged, no matter what value is sent (tried a
+    // downgrade, a sideways change, and an upgrade — none took effect, and
+    // no new pending invitation appeared either). The only way that
+    // actually changes an existing collaborator's level is to remove them
+    // and re-invite at the new level, which is what this does whenever the
+    // target is already a direct collaborator — otherwise it just invites
+    // directly, so a first-time invite isn't paying for a pointless
+    // remove call.
+    public async Task SetCollaboratorPermissionAsync(string username, string permission) =>
+        await SetCollaboratorPermissionAsync(_auth.Owner, _auth.Repository, username, permission, ownRepo: true);
+
+    // Same operation but against an arbitrary owner/repo instead of the
+    // configured one — "assign this collaborator to another repository"
+    // from the Access Levels page. Only works for repos the configured
+    // token's account can actually administer.
+    public async Task InviteCollaboratorToRepoAsync(string owner, string repository, string username, string permission) =>
+        await SetCollaboratorPermissionAsync(owner, repository, username, permission, ownRepo: false);
+
+    private async Task SetCollaboratorPermissionAsync(string owner, string repository, string username, string permission, bool ownRepo)
     {
         var client = _auth.CreateClient();
 
-        var url =
-            $"https://api.github.com/repos/{_auth.Owner}/{_auth.Repository}/collaborators/{Uri.EscapeDataString(username)}";
-
-        var body = new { permission };
-        var json = System.Text.Json.JsonSerializer.Serialize(body);
-
-        var response = await client.PutAsync(url, new StringContent(json, Encoding.UTF8, "application/json"));
-
-        await HttpClientHelper.EnsureSuccessAsync(response);
-
-        _cache.Remove($"collaborators:{_auth.Owner}/{_auth.Repository}");
-    }
-
-    // Same call as InviteCollaboratorAsync but against an arbitrary
-    // owner/repo instead of the configured one — "assign this collaborator
-    // to another repository" from the Access Levels page. Only works for
-    // repos the configured token's account can actually administer.
-    public async Task InviteCollaboratorToRepoAsync(string owner, string repository, string username, string permission)
-    {
-        var client = _auth.CreateClient();
-
-        var url =
+        var collaboratorUrl =
             $"https://api.github.com/repos/{owner}/{repository}/collaborators/{Uri.EscapeDataString(username)}";
 
+        // "Check if a user is a repository collaborator" — 204 if yes, 404
+        // if no. Checked first rather than blindly deleting, so a
+        // brand-new invite doesn't pay for (or risk erroring on) a remove
+        // call against someone who was never a collaborator to begin with.
+        var checkResponse = await client.GetAsync(collaboratorUrl);
+
+        if (checkResponse.StatusCode != System.Net.HttpStatusCode.NotFound)
+        {
+            await HttpClientHelper.EnsureSuccessAsync(checkResponse);
+
+            var removeResponse = await client.DeleteAsync(collaboratorUrl);
+            await HttpClientHelper.EnsureSuccessAsync(removeResponse);
+        }
+
         var body = new { permission };
         var json = System.Text.Json.JsonSerializer.Serialize(body);
 
-        var response = await client.PutAsync(url, new StringContent(json, Encoding.UTF8, "application/json"));
+        var inviteResponse = await client.PutAsync(collaboratorUrl, new StringContent(json, Encoding.UTF8, "application/json"));
 
-        await HttpClientHelper.EnsureSuccessAsync(response);
+        await HttpClientHelper.EnsureSuccessAsync(inviteResponse);
+
+        if (ownRepo)
+            _cache.Remove($"collaborators:{_auth.Owner}/{_auth.Repository}");
     }
 
     public async Task RemoveCollaboratorAsync(string username)

@@ -548,6 +548,38 @@ textarea{
 
 }
 
+.access-filters-row{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:10px;
+
+    margin-bottom:20px;
+
+}
+
+.access-filters-row .clearable-input-wrap{
+
+    flex:1;
+
+}
+
+/* Compound selector, not just .access-level-filter — .form-control's own
+   width:100% sits later in this file, so with equal specificity it would
+   win on source order alone and blow this select up to fill the row
+   (confirmed: that's exactly what happened before this was compounded). */
+.access-filters-row .access-level-filter{
+
+    flex:0 0 auto;
+
+    width:auto;
+
+    min-width:160px;
+
+}
+
 .access-invite-panel{
 
     padding:16px;

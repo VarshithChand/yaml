@@ -18,6 +18,7 @@ export default function AccessLevels() {
     const [entries, setEntries] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
+    const [levelFilter, setLevelFilter] = useState("");
     const [busyLogin, setBusyLogin] = useState(null);
 
     const [showInvite, setShowInvite] = useState(false);
@@ -63,11 +64,11 @@ export default function AccessLevels() {
 
         const query = search.trim().toLowerCase();
 
-        if (!query) return entries;
+        return entries
+            .filter((e) => !query || e.login.toLowerCase().includes(query))
+            .filter((e) => !levelFilter || e.permission === levelFilter);
 
-        return entries.filter((e) => e.login.toLowerCase().includes(query));
-
-    }, [entries, search]);
+    }, [entries, search, levelFilter]);
 
     async function handleChangePermission(entry, permission) {
 
@@ -76,13 +77,25 @@ export default function AccessLevels() {
             setBusyLogin(entry.login);
 
             if (entry.status === "pending") {
+
                 await updateInvitation(entry.invitationId, permission);
+                toast.show(`${entry.login}'s pending invitation updated to ${levelInfo(permission).label}.`, "success");
+
             }
             else {
+
+                // GitHub only actually applies a permission change for an
+                // active collaborator by removing and re-inviting them —
+                // there's no in-place update. They'll show as "Pending"
+                // again below until they accept.
                 await inviteCollaborator(entry.login, permission);
+                toast.show(
+                    `${entry.login} was removed and re-invited at ${levelInfo(permission).label} — GitHub has no way to change an existing collaborator's level in place. They'll need to accept again.`,
+                    "success"
+                );
+
             }
 
-            toast.show(`${entry.login}'s access set to ${levelInfo(permission).label}. GitHub will notify them.`, "success");
             load();
 
         }
@@ -261,16 +274,32 @@ export default function AccessLevels() {
             )}
 
             <p className="empty-state" style={{ padding: "0 0 15px", textAlign: "left" }}>
-                Everyone with access to this repository, invited or already in. Changing someone's
-                level here triggers GitHub's own notification email to them — the portal doesn't
-                send a separate one.
+                Everyone with access to this repository, invited or already in. Changing a{" "}
+                <strong>pending</strong> invitation's level updates it in place. GitHub has no way to
+                change an <strong>active</strong> collaborator's level in place, though — doing so
+                removes and re-invites them, so they'll need to accept again.
             </p>
 
-            <SearchBox
-                placeholder="Search by username..."
-                value={search}
-                onChange={setSearch}
-            />
+            <div className="access-filters-row">
+
+                <SearchBox
+                    placeholder="Search by username..."
+                    value={search}
+                    onChange={setSearch}
+                />
+
+                <select
+                    className="form-control access-level-filter"
+                    value={levelFilter}
+                    onChange={(e) => setLevelFilter(e.target.value)}
+                >
+                    <option value="">All levels</option>
+                    {PERMISSION_LEVELS.map((level) => (
+                        <option key={level.value} value={level.value}>{level.label}</option>
+                    ))}
+                </select>
+
+            </div>
 
             {loading ? (
 
@@ -282,7 +311,9 @@ export default function AccessLevels() {
 
             ) : filtered.length === 0 ? (
 
-                <p className="empty-state">No matches for "{search}".</p>
+                <p className="empty-state">
+                    No matches{search ? ` for "${search}"` : ""}{levelFilter ? ` at ${levelInfo(levelFilter).label}` : ""}.
+                </p>
 
             ) : (
 

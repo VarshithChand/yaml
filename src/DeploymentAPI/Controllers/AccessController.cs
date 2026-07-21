@@ -40,9 +40,11 @@ public class AccessController : ControllerBase
         return Ok(await _github.GetAccessEntriesAsync(force));
     }
 
-    // Invite page: creates a brand-new invitation. GitHub emails the
-    // invitee automatically the moment this call succeeds — the portal
-    // doesn't need its own notification step for that.
+    // Invites a brand-new collaborator, or changes an existing one's level
+    // (which GitHub only actually applies via a remove-then-reinvite —
+    // see SetCollaboratorPermissionAsync). GitHub emails the invitee
+    // automatically the moment this call succeeds — the portal doesn't
+    // need its own notification step for that.
     [HttpPut("collaborators/{username}")]
     public async Task<IActionResult> InviteCollaborator(string username, InviteCollaboratorUpdateDto request)
     {
@@ -51,7 +53,7 @@ public class AccessController : ControllerBase
 
         var permission = string.IsNullOrWhiteSpace(request.Permission) ? "push" : request.Permission;
 
-        await _github.InviteCollaboratorAsync(username, permission);
+        await _github.SetCollaboratorPermissionAsync(username, permission);
 
         _log.LogInfo("Access", $"Invited/updated collaborator '{username}' with '{permission}' access.");
 
