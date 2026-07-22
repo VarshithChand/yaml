@@ -138,17 +138,22 @@ persist in the bind-mounted `src/DeploymentAPI/data/` directory, so they survive
 
 ---
 
-## 5. Pull the pre-built images instead (no clone, no build)
+## 5. The Docker images — pull them straight onto any VM
 
-Every push to `master` that touches the frontend or backend builds and publishes both
-images to GitHub Container Registry via
-[`.github/workflows/Docker Build and Push.yml`](.github/workflows/Docker%20Build%20and%20Push.yml):
+Everything above (sections 1-4) is for building on your own machine. This step is the
+destination: two ready-made images, already built, sitting in a registry. Got a VM spun up
+somewhere — AWS, DigitalOcean, Azure, GCP, a home server, doesn't matter which — with
+Docker installed on it? You don't need to clone this repo or build anything there. Just
+pull these two images and run them:
 
-- `ghcr.io/varshithchand/deployment-portal-api`
-- `ghcr.io/varshithchand/deployment-portal-ui`
+| | Image | Pull command |
+|---|---|---|
+| **Backend** | `ghcr.io/varshithchand/deployment-portal-api` | `docker pull ghcr.io/varshithchand/deployment-portal-api:latest` |
+| **Frontend** | `ghcr.io/varshithchand/deployment-portal-ui` | `docker pull ghcr.io/varshithchand/deployment-portal-ui:latest` |
 
-This is the fastest way to run the portal on a machine that has never seen this repo —
-a fresh cloud VM, a teammate's laptop, anywhere Docker is installed.
+Both are rebuilt and re-published automatically by
+[`.github/workflows/Docker Build and Push.yml`](.github/workflows/Docker%20Build%20and%20Push.yml)
+every time `master` changes, so `:latest` always matches what's in this repo right now.
 
 ### 5a. If the packages are private (the default)
 
