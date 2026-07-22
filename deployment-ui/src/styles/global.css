@@ -367,6 +367,40 @@ textarea{
 
 }
 
+.page-header-row{
+
+    display:flex;
+
+    align-items:flex-start;
+
+    justify-content:space-between;
+
+    flex-wrap:wrap;
+
+    gap:8px 20px;
+
+}
+
+.page-header-row .page-title{
+
+    margin-bottom:25px;
+
+}
+
+.page-header-actions{
+
+    flex-shrink:0;
+
+    display:flex;
+
+    align-items:center;
+
+    /* Nudges the link's own baseline to line up with the title next to it
+       instead of sitting flush with the top of the row. */
+    margin-top:6px;
+
+}
+
 /* ==========================================
    CARD
 ========================================== */
@@ -924,8 +958,6 @@ textarea{
     cursor:pointer;
 
     padding:0;
-
-    margin-bottom:16px;
 
 }
 

@@ -105,9 +105,12 @@ export function TemplatesIcon() {
 // A hex-bolt shape (hexagon outline + center hole) — deliberately not a
 // circle-with-radiating-lines, since that's the Sun icon's own shape and
 // the two were reading as the same icon in the nav.
+// Rendered a size up from the other nav icons (width/height only — the
+// viewBox stays the shared 18x18 coordinate space) so the active Settings
+// item stays easy to pick out at a glance in the collapsed rail.
 export function SettingsIcon() {
     return (
-        <svg {...common}>
+        <svg width="23" height="23" viewBox="0 0 18 18" fill="none" aria-hidden="true">
             <polygon
                 points="9,2 13.3,4.5 13.3,9.5 9,12 4.7,9.5 4.7,4.5"
                 stroke="currentColor"

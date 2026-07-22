@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
     getSettings,
@@ -26,6 +26,19 @@ import useNavigation from "../hooks/useNavigation";
 import usePagination from "../hooks/usePagination";
 import parseRepoUrl from "../utils/parseRepoUrl";
 
+const VIEWS = ["hub", "credentials", "activity-log", "access-levels", "branches"];
+
+// Mirrors the same "?tab=" pattern NavigationContext uses for the top-level
+// tab, one level down — so reloading (or bookmarking) a Settings sub-page
+// like Activity Log lands back on that sub-page instead of bouncing to hub.
+function readViewFromUrl() {
+
+    const requested = new URLSearchParams(window.location.search).get("view");
+
+    return VIEWS.includes(requested) ? requested : "hub";
+
+}
+
 export default function Settings() {
 
     const toast = useToast();
@@ -35,9 +48,25 @@ export default function Settings() {
 
     // "hub" is the Settings landing page — a couple of option tiles rather
     // than one long scroll of every card at once. Picking one switches to
-    // that section in place; there's no separate route/URL for these, so
-    // navigating away and back through Sidebar always lands on the hub.
-    const [view, setView] = useState("hub");
+    // that section in place, and is kept in sync with "?view=" in the URL
+    // (see readViewFromUrl/setView below) so it survives a reload.
+    const [view, setViewState] = useState(readViewFromUrl);
+
+    const setView = useCallback((nextView) => {
+
+        setViewState(nextView);
+
+        const url = new URL(window.location.href);
+
+        if (nextView === "hub") {
+            url.searchParams.delete("view");
+        } else {
+            url.searchParams.set("view", nextView);
+        }
+
+        window.history.replaceState(null, "", url);
+
+    }, []);
 
     const [loading, setLoading] = useState(true);
 
@@ -483,7 +512,14 @@ export default function Settings() {
 
     return (
 
-        <PageLayout title={pageTitle}>
+        <PageLayout
+            title={pageTitle}
+            actions={view !== "hub" && (
+                <button type="button" className="settings-back-link" onClick={() => setView("hub")}>
+                    ← Back to Settings
+                </button>
+            )}
+        >
 
             {dialog}
 
@@ -557,10 +593,6 @@ export default function Settings() {
             {view === "credentials" && (
 
             <>
-
-            <button type="button" className="settings-back-link" onClick={() => setView("hub")}>
-                ← Back to Settings
-            </button>
 
             <div className="card">
 
@@ -889,10 +921,6 @@ export default function Settings() {
 
             <>
 
-            <button type="button" className="settings-back-link" onClick={() => setView("hub")}>
-                ← Back to Settings
-            </button>
-
             <div className="card">
 
                 <h2 className="card-title">
@@ -975,10 +1003,6 @@ export default function Settings() {
 
             <>
 
-            <button type="button" className="settings-back-link" onClick={() => setView("hub")}>
-                ← Back to Settings
-            </button>
-
             <AccessLevels />
 
             </>
@@ -988,10 +1012,6 @@ export default function Settings() {
             {view === "branches" && (
 
             <>
-
-            <button type="button" className="settings-back-link" onClick={() => setView("hub")}>
-                ← Back to Settings
-            </button>
 
             <BranchManager />
 
