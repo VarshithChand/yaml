@@ -1,0 +1,40 @@
+services:
+  deployment-api:
+    image: ghcr.io/varshithchand/deployment-portal-api:latest
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # Named volume below, not a bind mount — this file is meant to run
+      # standalone (no repo checkout needed), so there's no local
+      # ./src/DeploymentAPI/data folder to point at.
+      SETTINGS_FILE_PATH: /data/appsettings.Local.json
+      GitHub__Owner: ${GITHUB_OWNER}
+      GitHub__Repository: ${GITHUB_REPOSITORY}
+      GitHub__PersonalAccessToken: ${GITHUB_PAT}
+    volumes:
+      - deployment-data:/data
+    networks:
+      - portal-network
+    expose:
+      - "8080"
+    restart: unless-stopped
+
+  deployment-ui:
+    image: ghcr.io/varshithchand/deployment-portal-ui:latest
+    ports:
+      - "8081:80"
+    depends_on:
+      # The image's own HEALTHCHECK (baked in at build time, see
+      # src/DeploymentAPI/Dockerfile) still applies here even though this
+      # file only pulls the image rather than building it.
+      deployment-api:
+        condition: service_healthy
+    networks:
+      - portal-network
+    restart: unless-stopped
+
+networks:
+  portal-network:
+    driver: bridge
+
+volumes:
+  deployment-data:

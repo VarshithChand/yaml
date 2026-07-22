@@ -138,7 +138,87 @@ persist in the bind-mounted `src/DeploymentAPI/data/` directory, so they survive
 
 ---
 
-## 5. Deploying it for free (Fly.io + Cloudflare Pages)
+## 5. Pull the pre-built images instead (no clone, no build)
+
+Every push to `master` that touches the frontend or backend builds and publishes both
+images to GitHub Container Registry via
+[`.github/workflows/Docker Build and Push.yml`](.github/workflows/Docker%20Build%20and%20Push.yml):
+
+- `ghcr.io/varshithchand/deployment-portal-api`
+- `ghcr.io/varshithchand/deployment-portal-ui`
+
+This is the fastest way to run the portal on a machine that has never seen this repo —
+a fresh cloud VM, a teammate's laptop, anywhere Docker is installed.
+
+### 5a. If the packages are private (the default)
+
+GHCR packages pushed by a workflow default to private. Either flip both to **Public** from
+each package's **Package settings** on GitHub (then anyone can `docker pull` with no login),
+or log in first with a [Personal Access Token](https://github.com/settings/tokens) that has
+the `read:packages` scope:
+
+```bash
+docker login ghcr.io -u YOUR_GITHUB_USERNAME -p YOUR_PAT_WITH_read_packages_SCOPE
+```
+
+### 5b. Run them with Compose
+
+Grab just this one file — [`docker-compose.prod.yml`](docker-compose.prod.yml) — no other
+part of the repo is needed:
+
+```bash
+curl -O https://raw.githubusercontent.com/VarshithChand/yaml/master/docker-compose.prod.yml
+```
+
+Next to it, create a `.env`:
+```
+GITHUB_OWNER=your-github-org-or-user
+GITHUB_REPOSITORY=your-repo-name
+GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+Then:
+```bash
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Same result as [section 4](#4-run-it-with-docker-instead) — frontend on
+**http://localhost:8081**, backend reachable internally at `deployment-api:8080` on the
+`portal-network` bridge network — except Docker pulls both images from GHCR instead of
+building them from source, and settings persist in a named `deployment-data` volume instead
+of a bind-mounted folder.
+
+### 5c. Or run them by hand, no compose file at all
+
+```bash
+docker network create portal-network
+
+docker run -d --name deployment-api --network portal-network \
+  -e GitHub__Owner=your-github-org-or-user \
+  -e GitHub__Repository=your-repo-name \
+  -e GitHub__PersonalAccessToken=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
+  -v deployment-data:/data \
+  ghcr.io/varshithchand/deployment-portal-api:latest
+
+docker run -d --name deployment-ui --network portal-network \
+  -p 8081:80 \
+  ghcr.io/varshithchand/deployment-portal-ui:latest
+```
+
+Both containers land on the same `portal-network`, so nginx inside `deployment-ui` still
+reaches `http://deployment-api:8080` by container name — exactly what Compose sets up
+automatically in 5b, just spelled out by hand.
+
+### On a cloud VM
+
+The exact same commands from 5b or 5c work unchanged on a fresh VM on any provider — AWS
+EC2, DigitalOcean, Azure, GCP, whatever — as long as Docker is installed and port **8081**
+is open in that provider's firewall/security group. Then open
+`http://YOUR_VM_PUBLIC_IP:8081`.
+
+---
+
+## 6. Deploying it for free (Fly.io + Cloudflare Pages)
 
 The backend goes on **Fly.io** (free allowance includes a small persistent volume, so
 saved Settings survive redeploys) and the frontend on **Cloudflare Pages** (free static
@@ -147,7 +227,7 @@ the frontend needs to know the backend's absolute URL at build time, and the two
 setup steps below (`fly deploy`, then the Pages dashboard) each depend on output from the
 other, so do them in order.
 
-### 5a. Deploy the backend to Fly.io
+### 6a. Deploy the backend to Fly.io
 
 Install the CLI:
 ```bash
@@ -187,7 +267,7 @@ curl https://YOUR-UNIQUE-APP-NAME.fly.dev/api/settings
 ```
 should return an empty settings JSON, not an error.
 
-### 5b. Deploy the frontend to Cloudflare Pages
+### 6b. Deploy the frontend to Cloudflare Pages
 
 This part's dashboard-only (Cloudflare doesn't have a "one command" path for a fresh
 project). At [dash.cloudflare.com](https://dash.cloudflare.com/) → **Workers & Pages** →
@@ -208,7 +288,7 @@ VITE_API_BASE_URL = https://YOUR-UNIQUE-APP-NAME.fly.dev
 instead of expecting a same-origin `/api/*`. Save and deploy; Cloudflare gives you a
 `https://your-project.pages.dev` URL.
 
-### 5c. Point the backend's CORS at the new frontend URL
+### 6c. Point the backend's CORS at the new frontend URL
 
 Back in a terminal:
 ```bash
@@ -232,7 +312,7 @@ and set your GitHub OAuth App's callback URL to match the first value.
 
 ---
 
-## 6. Running the sample services (optional)
+## 7. Running the sample services (optional)
 
 `AdminAPI`, `PMSCoreAPI`, and `SecurityAPI` are the sample ASP.NET Core services this portal
 deploys — you don't need them running to use the portal itself, but if you want to run one
@@ -279,10 +359,10 @@ deployment. Check that the account behind your saved Personal Access Token is a 
 
 **Deployed on Fly.io/Cloudflare Pages and API calls fail with a CORS error** — the backend
 only allows origins listed in `Cors:AllowedOrigins`; confirm you ran the `fly secrets set
-Cors__AllowedOrigins__0=...` step in [5c](#5c-point-the-backends-cors-at-the-new-frontend-url)
+Cors__AllowedOrigins__0=...` step in [6c](#6c-point-the-backends-cors-at-the-new-frontend-url)
 with your actual `pages.dev` URL (or custom domain).
 
 **Deployed, but "Login with GitHub" doesn't keep you logged in** — this needs
 `GitHubOAuth__CallbackUrl`/`GitHubOAuth__FrontendUrl` set to your real URLs (see the OAuth
-note at the end of section 5), and it only works over HTTPS, which both Fly.io and
+note at the end of section 6), and it only works over HTTPS, which both Fly.io and
 Cloudflare Pages give you by default — plain PAT-based usage doesn't need any of this.
