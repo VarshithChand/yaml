@@ -1,6 +1,7 @@
 import StatusBadge from "./StatusBadge";
 import usePagination from "../hooks/usePagination";
 import Pagination from "./common/Pagination";
+import CopyButton from "./common/CopyButton";
 
 export default function HistoryTable({ runs = [] }) {
 
@@ -43,7 +44,10 @@ export default function HistoryTable({ runs = [] }) {
 
                         <tr key={run.id}>
 
-                            <td>{run.id}</td>
+                            <td>
+                                {run.id}
+                                <CopyButton value={run.id} label="Copy run ID" />
+                            </td>
 
                             <td>{run.name}</td>
 

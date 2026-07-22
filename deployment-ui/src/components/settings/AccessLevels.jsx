@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 
 import useToast from "../../hooks/useToast";
+import useConfirm from "../../hooks/useConfirm";
 import usePagination from "../../hooks/usePagination";
 import Pagination from "../common/Pagination";
 import SearchBox from "../common/SearchBox";
@@ -14,6 +15,7 @@ import { PERMISSION_LEVELS, availableLevels, levelInfo } from "./permissionLevel
 export default function AccessLevels() {
 
     const toast = useToast();
+    const { confirm, dialog } = useConfirm();
 
     const [entries, setEntries] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -84,11 +86,15 @@ export default function AccessLevels() {
         // silently no-ops). Confirmed up front rather than doing it
         // silently, since it's a real, disruptive side effect the admin
         // should choose knowingly, not discover after the fact.
-        if (entry.status === "active" && !window.confirm(
-            `GitHub can't change ${entry.login}'s level in place. Setting it to ${levelInfo(permission).label} ` +
-            `will remove ${entry.login} and send a new invitation — they'll need to accept it again before they ` +
-            `have access. Continue?`
-        )) {
+        if (entry.status === "active" && !(await confirm({
+            title: "Change access level?",
+            message:
+                `GitHub can't change ${entry.login}'s level in place. Setting it to ${levelInfo(permission).label} ` +
+                `will remove ${entry.login} and send a new invitation — they'll need to accept it again before they ` +
+                `have access. Continue?`,
+            confirmLabel: "Change Level",
+            danger: true
+        }))) {
             return;
         }
 
@@ -130,7 +136,12 @@ export default function AccessLevels() {
 
         const verb = entry.status === "pending" ? "Cancel the invitation for" : "Remove";
 
-        if (!window.confirm(`${verb} ${entry.login}? ${entry.status === "pending" ? "They won't be able to accept it anymore." : "They'll lose all access immediately."}`)) {
+        if (!(await confirm({
+            title: entry.status === "pending" ? "Cancel invitation?" : "Remove collaborator?",
+            message: `${verb} ${entry.login}? ${entry.status === "pending" ? "They won't be able to accept it anymore." : "They'll lose all access immediately."}`,
+            confirmLabel: entry.status === "pending" ? "Cancel Invitation" : "Remove",
+            danger: true
+        }))) {
             return;
         }
 
@@ -263,6 +274,8 @@ export default function AccessLevels() {
     return (
 
         <div className="card">
+
+            {dialog}
 
             <div className="access-panel-header">
 

@@ -6,6 +6,7 @@ import { getPendingApprovals, submitApprovalDecision, getApprovalHistory } from 
 import useAuth from "../hooks/useAuth";
 import useNavigation from "../hooks/useNavigation";
 import useToast from "../hooks/useToast";
+import useConfirm from "../hooks/useConfirm";
 import LoadingSpinner from "../components/LoadingSpinner";
 import PageLayout from "../components/layout/PageLayout";
 import StatusBadge from "../components/StatusBadge";
@@ -16,6 +17,7 @@ export default function Approvals() {
     const { githubTokenConfigured, tokenOwner, canApproveReleases } = useAuth();
     const { setTab } = useNavigation();
     const toast = useToast();
+    const { confirm, dialog } = useConfirm();
 
     const [pending, setPending] = useState([]);
     const [history, setHistory] = useState([]);
@@ -114,9 +116,12 @@ export default function Approvals() {
             return;
         }
 
-        if (!window.confirm(
-            `${approve ? "Approve" : "Reject"} deployment to ${envIds.length} environment(s)? This cannot be undone.`
-        )) {
+        if (!(await confirm({
+            title: approve ? "Approve deployment?" : "Reject deployment?",
+            message: `${approve ? "Approve" : "Reject"} deployment to ${envIds.length} environment(s)? This cannot be undone.`,
+            confirmLabel: approve ? "Approve" : "Reject",
+            danger: !approve
+        }))) {
             return;
         }
 
@@ -174,6 +179,8 @@ export default function Approvals() {
     return (
 
         <PageLayout title="Release Approvals">
+
+            {dialog}
 
             {!githubTokenConfigured ? (
 

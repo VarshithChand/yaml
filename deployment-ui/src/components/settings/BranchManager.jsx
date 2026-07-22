@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import useToast from "../../hooks/useToast";
+import useConfirm from "../../hooks/useConfirm";
 import SearchBox from "../common/SearchBox";
 
 import {
@@ -16,6 +17,7 @@ import {
 export default function BranchManager() {
 
     const toast = useToast();
+    const { confirm, dialog } = useConfirm();
 
     const [collaborators, setCollaborators] = useState([]);
 
@@ -141,7 +143,12 @@ export default function BranchManager() {
 
     async function handleDeleteBranch(branch) {
 
-        if (!window.confirm(`Delete branch '${branch}'? This cannot be undone.`)) {
+        if (!(await confirm({
+            title: "Delete branch?",
+            message: `Delete branch '${branch}'? This cannot be undone.`,
+            confirmLabel: "Delete",
+            danger: true
+        }))) {
             return;
         }
 
@@ -246,7 +253,12 @@ export default function BranchManager() {
 
     async function handleRemoveRestriction(branch) {
 
-        if (!window.confirm(`Remove the push restriction on '${branch}'? Anyone with write access will be able to push again.`)) {
+        if (!(await confirm({
+            title: "Remove push restriction?",
+            message: `Remove the push restriction on '${branch}'? Anyone with write access will be able to push again.`,
+            confirmLabel: "Remove Restriction",
+            danger: true
+        }))) {
             return;
         }
 
@@ -277,6 +289,8 @@ export default function BranchManager() {
     return (
 
         <>
+
+        {dialog}
 
         <div className="card">
 

@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 export default function ConfirmDialog({
 
     open,
@@ -6,7 +8,15 @@ export default function ConfirmDialog({
 
     message,
 
-    confirmLabel = "Deploy",
+    confirmLabel = "Confirm",
+
+    cancelLabel = "Cancel",
+
+    // Destructive actions (delete, remove, clear) get the red confirm
+    // button and default focus on Cancel instead of Confirm — a safer
+    // default than a keyboard Enter accidentally triggering something
+    // irreversible.
+    danger = false,
 
     onConfirm,
 
@@ -14,17 +24,38 @@ export default function ConfirmDialog({
 
 }){
 
+    const cancelRef = useRef(null);
+    const confirmRef = useRef(null);
+
+    useEffect(() => {
+
+        if (!open) return;
+
+        (danger ? cancelRef : confirmRef).current?.focus();
+
+        function handleKeyDown(e) {
+            if (e.key === "Escape") onCancel();
+        }
+
+        document.addEventListener("keydown", handleKeyDown);
+        return () => document.removeEventListener("keydown", handleKeyDown);
+
+    }, [open, danger, onCancel]);
+
     if(!open)
 
         return null;
 
     return(
 
-        <div className="dialog-backdrop">
+        <div
+            className="dialog-backdrop"
+            onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+        >
 
-            <div className="dialog">
+            <div className="dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-dialog-title">
 
-                <h2>
+                <h2 id="confirm-dialog-title">
 
                     {title}
 
@@ -39,7 +70,8 @@ export default function ConfirmDialog({
                 <div>
 
                     <button
-                        className="btn btn-success"
+                        ref={confirmRef}
+                        className={`btn ${danger ? "btn-danger" : "btn-success"}`}
                         onClick={onConfirm}
                     >
 
@@ -48,11 +80,12 @@ export default function ConfirmDialog({
                     </button>
 
                     <button
-                        className="btn"
+                        ref={cancelRef}
+                        className="btn btn-secondary"
                         onClick={onCancel}
                     >
 
-                        Cancel
+                        {cancelLabel}
 
                     </button>
 

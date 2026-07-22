@@ -12,15 +12,18 @@ import {
 import useAuth from "../hooks/useAuth";
 import useNavigation from "../hooks/useNavigation";
 import useToast from "../hooks/useToast";
+import useConfirm from "../hooks/useConfirm";
 import LoadingSpinner from "../components/LoadingSpinner";
 import PageLayout from "../components/layout/PageLayout";
 import Pagination from "../components/common/Pagination";
+import CopyButton from "../components/common/CopyButton";
 
 export default function PullRequests() {
 
     const { githubTokenConfigured, tokenOwner, canApproveReleases } = useAuth();
     const { setTab } = useNavigation();
     const toast = useToast();
+    const { confirm, dialog } = useConfirm();
 
     const [open, setOpen] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -145,7 +148,11 @@ export default function PullRequests() {
 
     async function handleMerge(number) {
 
-        if (!window.confirm(`Merge PR #${number}? This cannot be undone.`)) {
+        if (!(await confirm({
+            title: "Merge pull request?",
+            message: `Merge PR #${number}? This cannot be undone.`,
+            confirmLabel: "Merge"
+        }))) {
             return;
         }
 
@@ -202,6 +209,8 @@ export default function PullRequests() {
     return (
 
         <PageLayout title="Pull Requests">
+
+            {dialog}
 
             {!githubTokenConfigured ? (
 
@@ -408,7 +417,12 @@ export default function PullRequests() {
                                     {commitsPageItems.map((c) => (
 
                                         <tr key={c.sha}>
-                                            <td><a href={c.htmlUrl} target="_blank" rel="noreferrer">{c.message}</a></td>
+                                            <td>
+                                                <a href={c.htmlUrl} target="_blank" rel="noreferrer">{c.message}</a>
+                                                {" "}
+                                                <span className="commit-sha">{c.sha.slice(0, 7)}</span>
+                                                <CopyButton value={c.sha} label="Copy full commit SHA" />
+                                            </td>
                                             <td>{c.author}</td>
                                             <td>{new Date(c.date).toLocaleString()}</td>
                                         </tr>

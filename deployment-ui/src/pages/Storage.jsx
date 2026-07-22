@@ -8,6 +8,7 @@ import PageLayout from "../components/layout/PageLayout";
 import ArtifactsTable from "../components/storage/ArtifactsTable";
 import DockerImagesTable from "../components/storage/DockerImagesTable";
 import useToast from "../hooks/useToast";
+import useConfirm from "../hooks/useConfirm";
 
 export default function Storage() {
 
@@ -22,6 +23,7 @@ export default function Storage() {
     const [deletingId, setDeletingId] = useState(null);
 
     const toast = useToast();
+    const { confirm, dialog } = useConfirm();
 
     async function load() {
 
@@ -85,7 +87,12 @@ export default function Storage() {
 
     async function handleDeleteArtifact(artifact) {
 
-        if (!window.confirm(`Delete artifact "${artifact.name}"? This cannot be undone.`)) {
+        if (!(await confirm({
+            title: "Delete artifact?",
+            message: `Delete artifact "${artifact.name}"? This cannot be undone.`,
+            confirmLabel: "Delete",
+            danger: true
+        }))) {
             return;
         }
 
@@ -123,6 +130,8 @@ export default function Storage() {
     return (
 
         <PageLayout title="Artifacts & Images">
+
+            {dialog}
 
             <ArtifactsTable
                 artifacts={artifacts}

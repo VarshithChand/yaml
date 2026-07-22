@@ -20,6 +20,7 @@ import ComboBox from "../components/common/ComboBox";
 import ClearableInput from "../components/common/ClearableInput";
 import Pagination from "../components/common/Pagination";
 import useToast from "../hooks/useToast";
+import useConfirm from "../hooks/useConfirm";
 import useAuth from "../hooks/useAuth";
 import useNavigation from "../hooks/useNavigation";
 import usePagination from "../hooks/usePagination";
@@ -28,6 +29,7 @@ import parseRepoUrl from "../utils/parseRepoUrl";
 export default function Settings() {
 
     const toast = useToast();
+    const { confirm, dialog } = useConfirm();
     const { refreshOauthStatus } = useAuth();
     const { pendingRepoUrl, setPendingRepoUrl } = useNavigation();
 
@@ -379,7 +381,12 @@ export default function Settings() {
 
     async function handleClear(section, label) {
 
-        if (!window.confirm(`Clear all saved ${label}? This cannot be undone.`)) {
+        if (!(await confirm({
+            title: "Clear saved data?",
+            message: `Clear all saved ${label}? This cannot be undone.`,
+            confirmLabel: "Clear",
+            danger: true
+        }))) {
             return;
         }
 
@@ -421,10 +428,14 @@ export default function Settings() {
     // before this, so a reload is what actually clears that everywhere.
     async function handleClearAll() {
 
-        if (!window.confirm(
-            "Clear ALL saved data? This removes the GitHub repository URL and token, " +
-            "Docker credentials, OAuth settings, and the admin allowlist. This cannot be undone."
-        )) {
+        if (!(await confirm({
+            title: "Clear all data?",
+            message:
+                "Clear ALL saved data? This removes the GitHub repository URL and token, " +
+                "Docker credentials, OAuth settings, and the admin allowlist. This cannot be undone.",
+            confirmLabel: "Clear All Data",
+            danger: true
+        }))) {
             return;
         }
 
@@ -473,6 +484,8 @@ export default function Settings() {
     return (
 
         <PageLayout title={pageTitle}>
+
+            {dialog}
 
             {view === "hub" && (
 
