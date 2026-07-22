@@ -105,19 +105,23 @@ export function TemplatesIcon() {
 // A hex-bolt shape (hexagon outline + center hole) — deliberately not a
 // circle-with-radiating-lines, since that's the Sun icon's own shape and
 // the two were reading as the same icon in the nav.
-// Rendered a size up from the other nav icons (width/height only — the
-// viewBox stays the shared 18x18 coordinate space) so the active Settings
-// item stays easy to pick out at a glance in the collapsed rail.
+// Classic 8-tooth gear/cog — an 8-pointed star polygon with vertices
+// placed by trig (alternating an outer "tooth tip" radius and an inner
+// "valley" radius every 22.5°) rather than a hand-drawn curve path, plus
+// a plain circle for the center hole. Rendered a size up from the other
+// nav icons (width/height only — the viewBox stays the shared 18x18
+// coordinate space) so the active Settings item stays easy to pick out
+// at a glance in the collapsed rail.
 export function SettingsIcon() {
     return (
         <svg width="23" height="23" viewBox="0 0 18 18" fill="none" aria-hidden="true">
             <polygon
-                points="9,2 13.3,4.5 13.3,9.5 9,12 4.7,9.5 4.7,4.5"
+                points="9,1.4 10.91,4.38 14.37,3.63 13.62,7.09 16.6,9 13.62,10.91 14.37,14.37 10.91,13.62 9,16.6 7.09,13.62 3.63,14.37 4.38,10.91 1.4,9 4.38,7.09 3.63,3.63 7.09,4.38"
                 stroke="currentColor"
-                strokeWidth="1.4"
+                strokeWidth="1.3"
                 strokeLinejoin="round"
             />
-            <circle cx="9" cy="7" r="2.1" stroke="currentColor" strokeWidth="1.4" />
+            <circle cx="9" cy="9" r="2.3" stroke="currentColor" strokeWidth="1.4" />
         </svg>
     );
 }
