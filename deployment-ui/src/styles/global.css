@@ -478,6 +478,13 @@ textarea{
 
     gap:20px;
 
+    /* .card has its own margin-bottom (25px) that gives stacked cards
+       breathing room automatically, but this grid is a plain div, not a
+       .card — without this it sits flush against whatever follows it
+       (the Danger Zone card had a literal 0px gap above it). Matches the
+       grid's own internal gap for a consistent rhythm. */
+    margin-bottom:20px;
+
 }
 
 .settings-hub-tile{
