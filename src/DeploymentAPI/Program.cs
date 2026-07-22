@@ -75,6 +75,9 @@ builder.Services.AddMemoryCache();
 //
 builder.Services.AddSingleton<GitHubAuthService>();
 builder.Services.AddSingleton<ActivityLogService>();
+// Docker.DotNet's client is meant to be created once and reused, like
+// HttpClient, rather than re-connected to the daemon on every request.
+builder.Services.AddSingleton<DockerApiService>();
 builder.Services.AddScoped<GitHubApiService>();
 builder.Services.AddScoped<DeploymentService>();
 builder.Services.AddScoped<NotificationService>();

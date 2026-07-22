@@ -54,6 +54,18 @@ export function PullRequestIcon() {
     );
 }
 
+// Two stacked boxes (a small one atop a larger one) — a shipping-container
+// metaphor distinct from both DashboardIcon's 2x2 grid and StorageIcon's
+// single rect-with-divider.
+export function DockerIcon() {
+    return (
+        <svg {...common}>
+            <rect x="4.5" y="3" width="9" height="5" rx="1" stroke="currentColor" strokeWidth="1.3" />
+            <rect x="2.5" y="9.5" width="13" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.4" />
+        </svg>
+    );
+}
+
 export function StorageIcon() {
     return (
         <svg {...common}>

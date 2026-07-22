@@ -14,6 +14,7 @@ import {
     TimelineIcon,
     HistoryIcon,
     TemplatesIcon,
+    DockerIcon,
     SettingsIcon,
     ChevronIcon,
     SunIcon,
@@ -35,6 +36,7 @@ const TABS = [
     { key: "timeline", label: "Timeline", Icon: TimelineIcon },
     { key: "history", label: "History", Icon: HistoryIcon },
     { key: "templates", label: "Template Tester", Icon: TemplatesIcon },
+    { key: "docker", label: "Docker", Icon: DockerIcon },
     { key: "settings", label: "Settings", Icon: SettingsIcon }
 ];
 

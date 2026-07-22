@@ -336,6 +336,20 @@ dotnet run
 | SecurityAPI | http://localhost:5159 |
 | DeploymentAPI | http://localhost:5279 |
 
+Each also has its own `Dockerfile` now, and `docker compose up --build` (section 4) brings
+all three up alongside the Portal itself — `admin-api` on **:8090**, `pmscore-api` on
+**:8091**, `security-api` on **:8092**.
+
+### The Docker management page
+
+With the Portal running via Compose (its backend needs `/var/run/docker.sock` mounted in —
+already wired up in `docker-compose.yml`), open the **Docker** tab in the sidebar to see
+every container/image/volume/network on that host, not just these three — start, stop,
+restart, remove, view logs, or spin up a brand-new container from an image, right from the
+UI. It's admin-gated the same way Settings and Approvals are (see section 3's admin
+allowlist), since it can control anything running on the host, not only this portal's own
+services.
+
 To build everything in the repo at once instead of one project at a time:
 ```bash
 dotnet build Demo-Patch-CICD.slnx

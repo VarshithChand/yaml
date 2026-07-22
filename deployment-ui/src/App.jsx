@@ -7,6 +7,7 @@ import History from "./pages/History";
 import Analytics from "./pages/Analytics";
 import Timeline from "./pages/Timeline";
 import TemplateTester from "./pages/TemplateTester";
+import Docker from "./pages/Docker";
 import Settings from "./pages/Settings";
 
 import TopBar from "./components/layout/TopBar";
@@ -42,6 +43,7 @@ function App(){
                         {tab === "timeline" && <Timeline/>}
                         {tab === "history" && <History/>}
                         {tab === "templates" && <TemplateTester/>}
+                        {tab === "docker" && <Docker/>}
                         {tab === "settings" && <Settings/>}
 
                     </ErrorBoundary>

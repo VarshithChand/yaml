@@ -19,6 +19,15 @@ services:
       GitHub__PersonalAccessToken: ${GITHUB_PAT}
     volumes:
       - ./src/DeploymentAPI/data:/data
+      # Lets the Docker management page (Containers/Images/Volumes/Networks)
+      # talk to the *host's* Docker daemon via Docker.DotNet, the same way
+      # the `docker` CLI would. This is equivalent to giving the container
+      # root on the host — anyone who can reach this API's Docker endpoints
+      # can control every container on the machine, not just the sample
+      # services below, which is why every Docker management endpoint is
+      # gated to admins only (see DockerController + AdminGate). Don't mount
+      # this in a deployment you don't fully trust.
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - portal-network
     expose:
@@ -41,6 +50,40 @@ services:
         condition: service_healthy
     networks:
       - portal-network
+    restart: unless-stopped
+
+  # The three sample services the Portal deploys — not required for the
+  # Portal itself to run, but bringing them up under Compose gives the new
+  # Docker management page (see DockerController) real containers on the
+  # same host to actually list/stop/restart/remove, instead of an empty page.
+  admin-api:
+    build:
+      context: ./src/AdminAPI
+      dockerfile: Dockerfile
+    networks:
+      - portal-network
+    ports:
+      - "8090:8080"
+    restart: unless-stopped
+
+  pmscore-api:
+    build:
+      context: ./src/PMSCoreAPI
+      dockerfile: Dockerfile
+    networks:
+      - portal-network
+    ports:
+      - "8091:8080"
+    restart: unless-stopped
+
+  security-api:
+    build:
+      context: ./src/SecurityAPI
+      dockerfile: Dockerfile
+    networks:
+      - portal-network
+    ports:
+      - "8092:8080"
     restart: unless-stopped
 
 networks:

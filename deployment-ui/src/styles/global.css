@@ -3341,6 +3341,34 @@ textarea{
 
 }
 
+.docker-logs{
+
+    font-family:'Source Code Pro','Consolas',monospace;
+
+    font-size:12px;
+
+    line-height:1.5;
+
+    background:var(--bg);
+
+    border:1px solid var(--border);
+
+    border-radius:8px;
+
+    padding:12px;
+
+    max-height:320px;
+
+    overflow:auto;
+
+    white-space:pre-wrap;
+
+    word-break:break-all;
+
+    color:var(--text);
+
+}
+
 .toast.success{
 
     background:#16a34a;
