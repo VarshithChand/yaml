@@ -105,6 +105,19 @@ export function HistoryIcon() {
     );
 }
 
+// Three stacked bars — reads as "a list of services", distinct from
+// Dashboard's 2x2 grid, Docker's two different-size boxes, and
+// Analytics's ascending bars.
+export function ServicesIcon() {
+    return (
+        <svg {...common}>
+            <rect x="2.5" y="2.5" width="13" height="3.5" rx="1" stroke="currentColor" strokeWidth="1.3" />
+            <rect x="2.5" y="7.25" width="13" height="3.5" rx="1" stroke="currentColor" strokeWidth="1.3" />
+            <rect x="2.5" y="12" width="13" height="3.5" rx="1" stroke="currentColor" strokeWidth="1.3" />
+        </svg>
+    );
+}
+
 export function TemplatesIcon() {
     return (
         <svg {...common}>
