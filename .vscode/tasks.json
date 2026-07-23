@@ -2,6 +2,12 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Run DeploymentAPI",
+      "type": "shell",
+      "command": "dotnet run --project src/DeploymentAPI/DeploymentAPI.csproj",
+      "isBackground": true
+    },
+    {
       "label": "Run AdminAPI",
       "type": "shell",
       "command": "dotnet run --project src/AdminAPI/AdminAPI.csproj",
@@ -20,11 +26,32 @@
       "isBackground": true
     },
     {
+      "label": "Run Frontend",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": {
+        "cwd": "${workspaceFolder}/deployment-ui"
+      },
+      "isBackground": true
+    },
+    {
       "label": "Run All APIs",
       "dependsOn": [
+        "Run DeploymentAPI",
         "Run AdminAPI",
         "Run PMSCoreAPI",
         "Run SecurityAPI"
+      ],
+      "dependsOrder": "parallel"
+    },
+    {
+      "label": "Run Everything (APIs + Frontend)",
+      "dependsOn": [
+        "Run DeploymentAPI",
+        "Run AdminAPI",
+        "Run PMSCoreAPI",
+        "Run SecurityAPI",
+        "Run Frontend"
       ],
       "dependsOrder": "parallel"
     }

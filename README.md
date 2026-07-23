@@ -340,6 +340,18 @@ Each also has its own `Dockerfile` now, and `docker compose up --build` (section
 all three up alongside the Portal itself — `admin-api` on **:8090**, `pmscore-api` on
 **:8091**, `security-api` on **:8092**.
 
+### Running everything at once, without Docker
+
+Five separate `dotnet run`/`npm run dev` terminals gets old fast. Two shortcuts, both
+starting DeploymentAPI + AdminAPI + PMSCoreAPI + SecurityAPI + the frontend together:
+
+- **VS Code**: `Ctrl+Shift+P` → `Tasks: Run Task` → **Run Everything (APIs + Frontend)**
+  (see `.vscode/tasks.json` — there's also a narrower **Run All APIs** task that skips the
+  frontend, if that's all you need)
+- **Plain terminal (Windows/PowerShell)**: `.\run-all.ps1` from the repo root — opens one
+  titled window per service so their output doesn't interleave, and each stops
+  independently by closing its own window
+
 ### The Docker management page
 
 With the Portal running via Compose (its backend needs `/var/run/docker.sock` mounted in —
