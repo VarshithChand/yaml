@@ -1,8 +1,12 @@
+using SecurityAPI.Services;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddSingleton<AuditLogStore>();
+builder.Services.AddSingleton<ApiKeyStore>();
 
 var app = builder.Build();
 

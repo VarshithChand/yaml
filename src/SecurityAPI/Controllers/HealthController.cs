@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 
-namespace AdminAPI.Controllers;
+namespace SecurityAPI.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
@@ -11,7 +11,7 @@ public class HealthController : ControllerBase
     {
         return Ok(new
         {
-            Service = "AdminAPI",
+            Service = "SecurityAPI",
             Status = "Running"
         });
     }
