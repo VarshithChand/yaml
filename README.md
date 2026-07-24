@@ -223,7 +223,73 @@ is open in that provider's firewall/security group. Then open
 
 ---
 
-## 6. Deploying it for free (Fly.io + Cloudflare Pages)
+## 6. Deploying to AWS EC2
+
+Runs the full stack — Portal + all three sample services — on a single EC2 instance via
+`docker-compose.prod.yml` (section 5b), pulling pre-built images from GHCR instead of
+building on the instance.
+
+### 6a. Launch the instance
+
+From the EC2 console (or equivalent CLI/Terraform):
+
+| Setting | Value |
+|---|---|
+| AMI | Amazon Linux 2023 |
+| Instance type | `t3.small` (2 vCPU / 2 GB — comfortable for 5 containers; `t3.micro` works but is tight) |
+| Security group | Inbound: **22** (SSH, your IP only) and **8081** (HTTP, `0.0.0.0/0` or your IP) |
+| Key pair | Any you have SSH access to |
+
+### 6b. Bootstrap it
+
+Either paste [`scripts/aws/ec2-setup.sh`](scripts/aws/ec2-setup.sh) into the instance's
+**User data** field at launch (runs automatically as root on first boot), or SSH in after
+it's up and run:
+```bash
+curl -fsSL https://raw.githubusercontent.com/VarshithChand/yaml/master/scripts/aws/ec2-setup.sh | sudo bash
+```
+
+It installs Docker + the Compose plugin, pulls `docker-compose.prod.yml`, and — since there's
+no `.env` yet on a fresh instance — stops there with a template `.env` at
+`/opt/deployment-portal/.env` and a printed reminder. SSH in, fill in your real
+`GITHUB_OWNER`/`GITHUB_REPOSITORY`/`GITHUB_PAT`, then:
+```bash
+cd /opt/deployment-portal
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Open `http://YOUR_EC2_PUBLIC_IP:8081`.
+
+### 6c. If the GHCR packages are still private
+
+Same situation as section 5a — either flip all five packages to Public in their GitHub
+package settings, or `docker login ghcr.io` on the instance first with a PAT that has
+`read:packages` before the `docker compose pull` step above.
+
+### 6d. Redeploying after a new push
+
+```bash
+cd /opt/deployment-portal
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+```
+Only containers whose image actually changed get recreated; the rest are left running.
+Wiring this to run automatically (e.g. a GitHub Actions job that SSHes in after
+`Docker Build and Push.yml` finishes) is a reasonable next step but isn't set up yet — this
+is the manual version.
+
+### 6e. About the Docker socket mount
+
+`docker-compose.prod.yml` mounts `/var/run/docker.sock` into `deployment-api` the same way
+the build-from-source `docker-compose.yml` does, for the in-app **Docker** management page.
+That's equivalent to giving the container root on the EC2 instance — it's admin-gated in the
+app itself, but don't put the admin allowlist ([section 3](#first-run-configuration)) in
+bootstrap mode (empty) on a publicly reachable instance, since bootstrap mode means anyone
+can act as admin, including through that Docker page.
+
+---
+
+## 7. Deploying it for free (Fly.io + Cloudflare Pages)
 
 The backend goes on **Fly.io** (free allowance includes a small persistent volume, so
 saved Settings survive redeploys) and the frontend on **Cloudflare Pages** (free static
@@ -232,7 +298,7 @@ the frontend needs to know the backend's absolute URL at build time, and the two
 setup steps below (`fly deploy`, then the Pages dashboard) each depend on output from the
 other, so do them in order.
 
-### 6a. Deploy the backend to Fly.io
+### 7a. Deploy the backend to Fly.io
 
 Install the CLI:
 ```bash
@@ -272,7 +338,7 @@ curl https://YOUR-UNIQUE-APP-NAME.fly.dev/api/settings
 ```
 should return an empty settings JSON, not an error.
 
-### 6b. Deploy the frontend to Cloudflare Pages
+### 7b. Deploy the frontend to Cloudflare Pages
 
 This part's dashboard-only (Cloudflare doesn't have a "one command" path for a fresh
 project). At [dash.cloudflare.com](https://dash.cloudflare.com/) → **Workers & Pages** →
@@ -293,7 +359,7 @@ VITE_API_BASE_URL = https://YOUR-UNIQUE-APP-NAME.fly.dev
 instead of expecting a same-origin `/api/*`. Save and deploy; Cloudflare gives you a
 `https://your-project.pages.dev` URL.
 
-### 6c. Point the backend's CORS at the new frontend URL
+### 7c. Point the backend's CORS at the new frontend URL
 
 Back in a terminal:
 ```bash
@@ -317,7 +383,7 @@ and set your GitHub OAuth App's callback URL to match the first value.
 
 ---
 
-## 7. Running the sample services (optional)
+## 8. Running the sample services (optional)
 
 `AdminAPI`, `PMSCoreAPI`, and `SecurityAPI` are the sample ASP.NET Core services this portal
 deploys — you don't need them running to use the portal itself, but if you want to run one
@@ -390,10 +456,10 @@ deployment. Check that the account behind your saved Personal Access Token is a 
 
 **Deployed on Fly.io/Cloudflare Pages and API calls fail with a CORS error** — the backend
 only allows origins listed in `Cors:AllowedOrigins`; confirm you ran the `fly secrets set
-Cors__AllowedOrigins__0=...` step in [6c](#6c-point-the-backends-cors-at-the-new-frontend-url)
+Cors__AllowedOrigins__0=...` step in [7c](#7c-point-the-backends-cors-at-the-new-frontend-url)
 with your actual `pages.dev` URL (or custom domain).
 
 **Deployed, but "Login with GitHub" doesn't keep you logged in** — this needs
 `GitHubOAuth__CallbackUrl`/`GitHubOAuth__FrontendUrl` set to your real URLs (see the OAuth
-note at the end of section 6), and it only works over HTTPS, which both Fly.io and
+note at the end of section 7), and it only works over HTTPS, which both Fly.io and
 Cloudflare Pages give you by default — plain PAT-based usage doesn't need any of this.

@@ -12,6 +12,12 @@ services:
       GitHub__PersonalAccessToken: ${GITHUB_PAT}
     volumes:
       - deployment-data:/data
+      # Same tradeoff as docker-compose.yml's own build-from-source version
+      # — gives the Docker management page control over every container on
+      # this host, admin-gated in the app itself. See that file's comment
+      # for the full explanation before mounting this on a host you don't
+      # fully trust.
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - portal-network
     expose:
@@ -30,6 +36,33 @@ services:
         condition: service_healthy
     networks:
       - portal-network
+    restart: unless-stopped
+
+  # The three sample services — same reasoning as docker-compose.yml: not
+  # required for the Portal itself, but without them the Docker page and
+  # Services page have nothing real to show.
+  admin-api:
+    image: ghcr.io/varshithchand/deployment-portal-admin-api:latest
+    networks:
+      - portal-network
+    ports:
+      - "8090:8080"
+    restart: unless-stopped
+
+  pmscore-api:
+    image: ghcr.io/varshithchand/deployment-portal-pmscore-api:latest
+    networks:
+      - portal-network
+    ports:
+      - "8091:8080"
+    restart: unless-stopped
+
+  security-api:
+    image: ghcr.io/varshithchand/deployment-portal-security-api:latest
+    networks:
+      - portal-network
+    ports:
+      - "8092:8080"
     restart: unless-stopped
 
 networks:

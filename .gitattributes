@@ -1,0 +1,5 @@
+# Shell scripts run on Linux (EC2, GitHub Actions runners, Docker builds)
+# regardless of what platform they're edited/committed from — CRLF line
+# endings break the shebang and script parsing there, so force LF instead
+# of leaving it to whatever the committing machine's core.autocrlf says.
+*.sh text eol=lf

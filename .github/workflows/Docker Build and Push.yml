@@ -1,9 +1,10 @@
 name: Docker Build and Push
 
 ###############################################################
-# Builds the Deployment Portal's own two Docker images (the
-# backend API and the frontend UI -- see docker-compose.yml at
-# the repo root) and pushes them to GitHub Container Registry.
+# Builds all five of the Deployment Portal's own Docker images
+# (the backend API, the frontend UI, and the three sample
+# services -- see docker-compose.yml at the repo root) and
+# pushes them to GitHub Container Registry.
 #
 # Uses GITHUB_TOKEN, not a separate secret -- GHCR accepts it
 # directly, so there's nothing extra to configure on a fresh
@@ -19,6 +20,9 @@ on:
     paths:
       - 'deployment-ui/**'
       - 'src/DeploymentAPI/**'
+      - 'src/AdminAPI/**'
+      - 'src/PMSCoreAPI/**'
+      - 'src/SecurityAPI/**'
       - 'docker-compose.yml'
       - '.github/workflows/Docker Build and Push.yml'
 
@@ -36,8 +40,9 @@ env:
 jobs:
 
 ###############################################################
-# Build + push both images. One job, matrixed over the two --
-# they build independently and don't depend on each other.
+# Build + push all five images. One job, matrixed over all of
+# them -- they build independently and don't depend on each
+# other.
 ###############################################################
 
   build_and_push:
@@ -59,6 +64,21 @@ jobs:
             context: ./deployment-ui
             dockerfile: ./deployment-ui/Dockerfile
             image: deployment-portal-ui
+
+          - name: AdminAPI
+            context: ./src/AdminAPI
+            dockerfile: ./src/AdminAPI/Dockerfile
+            image: deployment-portal-admin-api
+
+          - name: PMSCoreAPI
+            context: ./src/PMSCoreAPI
+            dockerfile: ./src/PMSCoreAPI/Dockerfile
+            image: deployment-portal-pmscore-api
+
+          - name: SecurityAPI
+            context: ./src/SecurityAPI
+            dockerfile: ./src/SecurityAPI/Dockerfile
+            image: deployment-portal-security-api
 
     steps:
 
